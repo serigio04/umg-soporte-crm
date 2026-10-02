@@ -1,0 +1,432 @@
+{
+  "info": {
+    "_postman_id": "c8beeb22-db1d-46d9-9995-14de39bd8b21",
+    "name": "UMG - soporte",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "37559274"
+  },
+  "item": [
+    {
+      "name": "Login",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "let response = pm.response.json();\r",
+                  "\r",
+                  "let token = response.token;\r",
+                  "\r",
+                  "pm.collectionVariables.set(\"AuthToken\", token);\r",
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"correo\": \"coordinador@miumg.edu.gt\",\r\n    \"password\": \"123456\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{server url}}/api/auth/login",
+              "host": [
+                "{{server url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Login",
+              "originalRequest": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    \"correo\": \"coordinador@miumg.edu.gt\",\r\n    \"password\": \"123456\"\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{server url}}/api/auth/login",
+                  "host": [
+                    "{{server url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "auth",
+                    "login"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "X-Powered-By",
+                  "value": "Express"
+                },
+                {
+                  "key": "Access-Control-Allow-Origin",
+                  "value": "http://localhost:5173"
+                },
+                {
+                  "key": "Vary",
+                  "value": "Origin"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                },
+                {
+                  "key": "Content-Length",
+                  "value": "315"
+                },
+                {
+                  "key": "ETag",
+                  "value": "W/\"13b-Xt4vRww1N5J7eJDuFewVt0hPmn4\""
+                },
+                {
+                  "key": "Date",
+                  "value": "Fri, 02 Oct 2026 04:03:32 GMT"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Keep-Alive",
+                  "value": "timeout=5"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZFVzdWFyaW8iOjEsInJvbCI6IkNvb3JkaW5hZG9yIiwiaWF0IjoxNzkwOTEzODEyLCJleHAiOjE3OTA5NDI2MTJ9.YIwW13_uFuLq8RlsE82RJfrdlvYhfxLZwBRzHFZy5nQ\",\n    \"usuario\": {\n        \"idUsuario\": 1,\n        \"nombreCompleto\": \"Coordinador UMG\",\n        \"correoInstitucional\": \"coordinador@miumg.edu.gt\",\n        \"rol\": \"Coordinador\"\n    }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Tickets",
+      "item": [
+        {
+          "name": "Obtener tickes por id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "",
+                "value": "",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{server url}}/estudiante/tickets",
+              "host": [
+                "{{server url}}"
+              ],
+              "path": [
+                "estudiante",
+                "tickets"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Ticket 3",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "{{AuthToken}}",
+                    "type": "text",
+                    "disabled": true
+                  }
+                ],
+                "url": {
+                  "raw": "{{server url}}/api/tickets/:idTicket",
+                  "host": [
+                    "{{server url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "tickets",
+                    ":idTicket"
+                  ],
+                  "variable": [
+                    {
+                      "key": "idTicket",
+                      "value": "3"
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "X-Powered-By",
+                  "value": "Express"
+                },
+                {
+                  "key": "Access-Control-Allow-Origin",
+                  "value": "http://localhost:5173"
+                },
+                {
+                  "key": "Vary",
+                  "value": "Origin"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                },
+                {
+                  "key": "Content-Length",
+                  "value": "480"
+                },
+                {
+                  "key": "ETag",
+                  "value": "W/\"1e0-weTpoMQbRNWnRObBKtBNP1/axl0\""
+                },
+                {
+                  "key": "Date",
+                  "value": "Fri, 02 Oct 2026 04:06:56 GMT"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Keep-Alive",
+                  "value": "timeout=5"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"idTicket\": 3,\n    \"fechaCreacion\": \"2026-05-20T08:47:31.276Z\",\n    \"prioridadSLA\": \"Baja\",\n    \"tipologiaITIL\": \"Cambio\",\n    \"estado\": \"Abierto\",\n    \"descripcion\": \"Ticket de cambio de prueba\",\n    \"idEstudiante\": 1,\n    \"carneEstudiante\": \"99892311043\",\n    \"nombreEstudiante\": \"Sergio Gomar\",\n    \"idAgente\": 4,\n    \"horasRestantes\": 0,\n    \"vencido\": true,\n    \"historial\": [\n        {\n            \"estado\": \"Abierto\",\n            \"fecha\": \"2026-05-22T10:23:54.487Z\",\n            \"comentario\": \"Ticket creado\"\n        },\n        {\n            \"estado\": \"Abierto\",\n            \"fecha\": \"2026-05-20T08:47:31.276Z\",\n            \"comentario\": \"Ticket creado\"\n        }\n    ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Crear ticket",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json, text/plain, */*"
+              },
+              {
+                "key": "Accept-Language",
+                "value": "es-419,es;q=0.5"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZFVzdWFyaW8iOjcsInJvbCI6IkFnZW50ZSIsImlhdCI6MTc3OTM3ODYzNCwiZXhwIjoxNzc5NDA3NDM0fQ.S4gmJyHNdEfYO-_Tff-1UBTn-sChlcW_-QdQFhNyUs0"
+              },
+              {
+                "key": "Connection",
+                "value": "keep-alive"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "http://localhost:5173"
+              },
+              {
+                "key": "Referer",
+                "value": "http://localhost:5173/"
+              },
+              {
+                "key": "Sec-Fetch-Dest",
+                "value": "empty"
+              },
+              {
+                "key": "Sec-Fetch-Mode",
+                "value": "cors"
+              },
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-site"
+              },
+              {
+                "key": "Sec-GPC",
+                "value": "1"
+              },
+              {
+                "key": "User-Agent",
+                "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+              },
+              {
+                "key": "sec-ch-ua",
+                "value": "\"Brave\";v=\"147\", \"Not.A/Brand\";v=\"8\", \"Chromium\";v=\"147\""
+              },
+              {
+                "key": "sec-ch-ua-mobile",
+                "value": "?0"
+              },
+              {
+                "key": "sec-ch-ua-platform",
+                "value": "\"macOS\""
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"tipologiaITIL\":\"Incidente\",\n    \"descripcion\":\"estudiante no puede iniciar sesion TEST\",\n    \"idEstudiante\":99892311043\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{server url}}/api/tickets",
+              "host": [
+                "{{server url}}"
+              ],
+              "path": [
+                "api",
+                "tickets"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Crear ticket",
+              "originalRequest": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"tipologiaITIL\":\"Incidente\",\n    \"descripcion\":\"estudiante no puede iniciar sesion TEST\",\n    \"carnetEstudiante\":99892311043\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{server url}}/api/tickets",
+                  "host": [
+                    "{{server url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "tickets"
+                  ]
+                }
+              },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "X-Powered-By",
+                  "value": "Express"
+                },
+                {
+                  "key": "Access-Control-Allow-Origin",
+                  "value": "http://localhost:5173"
+                },
+                {
+                  "key": "Vary",
+                  "value": "Origin"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                },
+                {
+                  "key": "Content-Length",
+                  "value": "203"
+                },
+                {
+                  "key": "ETag",
+                  "value": "W/\"cb-rQFIMwKZhNxHYCIJkFnYJQQuAfc\""
+                },
+                {
+                  "key": "Date",
+                  "value": "Fri, 02 Oct 2026 17:32:23 GMT"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Keep-Alive",
+                  "value": "timeout=5"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"message\": \"Ticket creado exitosamente\",\n    \"ticket\": {\n        \"idTicket\": 18,\n        \"tipologiaITIL\": \"Incidente\",\n        \"descripcion\": \"estudiante no puede iniciar sesion TEST\",\n        \"prioridadSLA\": \"Alta\",\n        \"estado\": \"Abierto\",\n        \"idAgente\": 2\n    }\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "soporte url",
+      "value": ""
+    },
+    {
+      "key": "server url",
+      "value": ""
+    },
+    {
+      "key": "AuthToken",
+      "value": ""
+    }
+  ]
+}
