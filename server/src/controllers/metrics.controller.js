@@ -136,4 +136,26 @@ const descargarReporteCalificacionesExcel = async (req, res) => {
   }
 }
 
-module.exports = { obtenerDashboardCoordinador, obtenerMetricasAgente, descargarReporteCsv, descargarReporteExcel, descargarReporteCalificacionesExcel }
+const obtenerMetricas = async (req, res) => {
+  try {
+    const metricas = await metricsService.obtenerMetricas();
+    res.json(metricas).status(200);
+  }
+  catch (err) {
+    console.error('Error obteniendo métricas:', err);
+    res.status(500).json({ message: 'Error interno del servidor' });
+  }
+}
+
+const obtenerMetricasTickets = async (req, res) => {
+  try{
+    const metricas = await metricsService.obtenerMetricasTickets();
+    res.json(metricas).status(200);
+  }
+  catch (err) {
+    console.error('Error obteniendo métricas de tickets:', err);
+    res.status(500).json({ message: 'Error interno del servidor' });
+  }
+}
+
+module.exports = { obtenerDashboardCoordinador, obtenerMetricasAgente, descargarReporteCsv, descargarReporteExcel, descargarReporteCalificacionesExcel, obtenerMetricas, obtenerMetricasTickets }

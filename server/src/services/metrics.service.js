@@ -172,4 +172,83 @@ const obtenerDatosCalificacionesExcel = async () => {
   return query.rows
 }
 
-module.exports = { obtenerMetricasCoordinador, obtenerMetricasAgente, obtenerDatosReporteCsv, obtenerDatosCalificacionesExcel }
+const obtenerMetricas = async (req, res) => {
+  // Querys para obtener conteo de tickets según estado.
+  const ticketsAbiertosQuery = await pool.query(`
+    SELECT COUNT(*) as cantidad
+    FROM tickets
+    WHERE estado = 'Abierto'  
+  `);
+
+  const ticketsResueltosQuery = await pool.query(`
+    SELECT COUNT(*) as cantidad
+    FROM tickets
+    WHERE estado = 'Resuelto'
+  `);
+
+  const ticketsCerradosQuery = await pool.query(`
+    SELECT COUNT(*) as cantidad
+    FROM tickets
+    WHERE estado = 'Cerrado'
+  `);
+
+  const ticketsEnProcesoQuery = await pool.query(`
+    SELECT COUNT(*) as cantidad
+    FROM tickets
+    WHERE estado = 'EnProceso'
+  `);
+
+  // Query para obtener tiempo promedio de resolución de tickets (en horas).
+  const tiempoResQuery = await pool.query(`
+    SELECT AVG(EXTRACT(EPOCH FROM (h_fin.fechacambio - t.fechacreacion))/3600) as tiempo_promedio_horas
+    FROM tickets t
+    JOIN estadosticket h_fin ON t.idticket = h_fin.idticket
+    WHERE h_fin.nombreestado IN ('Resuelto', 'Cerrado')
+    AND t.estado IN ('Resuelto', 'Cerrado')
+  `);
+
+  // Query para obtener calificación general de tickets.
+  const calificacionGeneralQuery = await pool.query(`
+    SELECT AVG(calificacion) as promedio_calificacion, 
+            (AVG(calificacion) / 5.0) * 100 as porcentaje_calificacion
+    FROM encuestas
+    WHERE calificacion IS NOT NULL
+  `);
+
+  return {
+    tiempoPromedioResolucionHoras: tiempoResQuery.rows[0].tiempo_promedio_horas || 0,
+    ticketsAbiertos: parseInt(ticketsAbiertosQuery.rows[0].cantidad),
+    ticketsResueltos: parseInt(ticketsResueltosQuery.rows[0].cantidad),
+    ticketsCerrados: parseInt(ticketsCerradosQuery.rows[0].cantidad),
+    ticketsEnProceso: parseInt(ticketsEnProcesoQuery.rows[0].cantidad),
+    calificacionGeneral: calificacionGeneralQuery.rows[0] || { promedio_calificacion: 0, porcentaje_calificacion: 0 }
+  }
+}
+
+const obtenerMetricasTickets = async (req, res) => {
+  const IncidentesQuery = await pool.query(`
+    SELECT COUNT(*) as cantidad
+    FROM tickets
+    WHERE tipologiaitil = 'Incidente'
+  `);
+
+  const SolicitudQuery = await pool.query(`
+    SELECT COUNT(*) as cantidad
+    FROM tickets
+    WHERE tipologiaitil = 'Solicitud'
+  `);
+
+  const cambioQuery = await pool.query(`
+    SELECT COUNT(*) as cantidad
+    FROM tickets
+    WHERE tipologiaitil = 'Cambio'
+  `);
+
+  return {
+    incidentes: parseInt(IncidentesQuery.rows[0].cantidad),
+    solicitudes: parseInt(SolicitudQuery.rows[0].cantidad),
+    cambios: parseInt(cambioQuery.rows[0].cantidad)
+  }
+}
+
+module.exports = { obtenerMetricasCoordinador, obtenerMetricasAgente, obtenerDatosReporteCsv, obtenerDatosCalificacionesExcel, obtenerMetricas, obtenerMetricasTickets }
