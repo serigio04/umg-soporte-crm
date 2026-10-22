@@ -1,331 +1,173 @@
 openapi: 3.0.3
-
 info:
-  title: API Sistema de Gestión de Tickets de Soporte UMG
-  version: "1.0"
-  description: >
-    API REST para la gestión de tickets de soporte técnico de la Universidad
-    Mariano Gálvez. Permite a estudiantes crear tickets, a agentes atenderlos
-    según su especialidad, escalarlos a un coordinador y registrar encuestas
-    de satisfacción al resolverse.
-  contact:
-    name: Sergio Alejandro Gomar Barrios
-    email: sgomar@miumg.edu.gt
-
+  title: Sistema de Soporte UMG - API
+  description: ESPECIFICACIÓN TÉCNICA Y CONTRATO DE API RESTful para el Sistema de Gestión de Tickets e Incidentes ITIL (Universidad Mariano Gálvez).
+  version: 1.0.0
 servers:
   - url: http://localhost:3000/api
-    description: Servidor de desarrollo
-
-tags:
-  - name: Auth
-    description: Autenticación de usuarios
-  - name: Tickets
-    description: Gestión de tickets de soporte
-  - name: Agentes
-    description: Operaciones sobre agentes de soporte
-  - name: Estudiantes
-    description: Operaciones sobre estudiantes
-  - name: Encuestas
-    description: Encuestas de satisfacción
+    description: Servidor Local de Desarrollo
+  - url: https://api-soporte.miumg.edu.gt/api
+    description: Servidor de Producción / Staging
 
 paths:
-
   /auth/login:
     post:
-      tags: [Auth]
-      summary: Iniciar sesión
-      description: Autentica a un usuario (Estudiante, Agente o Coordinador) y retorna un token JWT.
-      security: []
+      summary: Autenticación de usuarios y generación de JWT
+      tags:
+        - Autenticación
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/LoginRequest'
+              $ref: '#/components/schemas/LoginInput'
       responses:
         '200':
-          description: Login exitoso
+          description: Autenticación exitosa
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/LoginResponse'
-        '400':
-          description: Correo y/o contraseña no enviados
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
         '401':
-          description: Credenciales inválidas
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
-          description: Error interno del servidor
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/401Unauthorized'
 
   /tickets:
-    get:
-      tags: [Tickets]
-      summary: Obtener mis tickets
-      description: Retorna el listado de tickets del estudiante autenticado.
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: Listado de tickets del estudiante
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Ticket'
-        '401':
-          description: Token no enviado o inválido
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
-          description: Estudiante no encontrado
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
-          description: Error interno del servidor
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
     post:
-      tags: [Tickets]
-      summary: Crear ticket
-      description: >
-        Crea un nuevo ticket de soporte. Si lo crea un Estudiante, se asocia
-        automáticamente a su perfil. Si lo crea un Agente o Coordinador, debe
-        indicar el carné del estudiante. El agente se asigna automáticamente
-        según la tipología ITIL.
+      summary: Crear un nuevo ticket de soporte (Transaccional)
+      tags:
+        - Tickets
       security:
-        - bearerAuth: []
+        - BearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CrearTicketRequest'
+              $ref: '#/components/schemas/TicketInput'
       responses:
         '201':
           description: Ticket creado exitosamente
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CrearTicketResponse'
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Ticket creado exitosamente
+                  ticket:
+                    $ref: '#/components/schemas/Ticket'
         '400':
-          description: Datos de entrada inválidos (tipología, descripción o carné faltante/incorrecto)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/400BadRequest'
         '401':
-          description: Token no enviado o inválido
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
-          description: Estudiante no encontrado
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
-          description: Error interno del servidor
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/401Unauthorized'
 
   /tickets/{idTicket}:
     get:
-      tags: [Tickets]
-      summary: Obtener detalle de un ticket
-      description: >
-        Retorna el detalle completo de un ticket, incluyendo horas restantes
-        según el SLA y el historial de cambios de estado.
+      summary: Obtener detalle completo de un ticket e historial SLA por ID
+      tags:
+        - Tickets
       security:
-        - bearerAuth: []
+        - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/IdTicketParam'
+        - name: idTicket
+          in: path
+          required: true
+          description: Identificador numérico del ticket
+          schema:
+            type: integer
+            example: 105
       responses:
         '200':
-          description: Detalle del ticket
+          description: Detalle del ticket recuperado exitosamente
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/TicketDetalle'
-        '401':
-          description: Token no enviado o inválido
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
         '404':
-          description: Ticket no encontrado
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
-          description: Error interno del servidor
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/404NotFound'
 
-  /tickets/{idTicket}/estado:
-    put:
-      tags: [Tickets]
-      summary: Cambiar estado de un ticket
-      description: >
-        Actualiza el estado de un ticket y registra el cambio en el historial.
-        Si el nuevo estado es "Resuelto", se genera automáticamente una
-        encuesta de satisfacción para el estudiante. No permitido si el
-        ticket ya está en estado "Cerrado".
+  /tickets/abiertos:
+    get:
+      summary: Consultar lista de tickets en estado Abierto
+      tags:
+        - Tickets
       security:
-        - bearerAuth: []
-      parameters:
-        - $ref: '#/components/parameters/IdTicketParam'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CambiarEstadoRequest'
+        - BearerAuth: []
       responses:
         '200':
-          description: Estado actualizado correctamente
+          description: Lista de tickets abiertos
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CambiarEstadoResponse'
-        '400':
-          description: Estado inválido o ID de ticket inválido
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '401':
-          description: Token no enviado o inválido
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
-          description: Ticket no encontrado
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
-          description: Error interno del servidor
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                type: array
+                items:
+                  $ref: '#/components/schemas/Ticket'
 
-  /encuestas/{idEncuesta}/responder:
-    post:
-      tags: [Encuestas]
-      summary: Responder encuesta de satisfacción
-      description: Registra la calificación y comentario del estudiante para un ticket resuelto.
+  /metricas:
+    get:
+      summary: Indicadores generales de rendimiento y KPIs del sistema
+      tags:
+        - Métricas
       security:
-        - bearerAuth: []
-      parameters:
-        - name: idEncuesta
-          in: path
-          required: true
-          description: Identificador de la encuesta a responder
-          schema:
-            type: integer
-            example: 12
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ResponderEncuestaRequest'
+        - BearerAuth: []
       responses:
         '200':
-          description: Encuesta registrada exitosamente
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MensajeResponse'
-        '400':
-          description: Calificación inválida (debe ser un valor entre 1 y 5)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '401':
-          description: Token no enviado o inválido
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
-          description: Encuesta no encontrada
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
-          description: Error interno del servidor
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          description: Métricas globales consolidadas
+
+  /metricas/tickets/clasificacion:
+    get:
+      summary: Clasificación estadística de tickets por tipología ITIL y SLA
+      tags:
+        - Métricas
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Conteo agrupado por tipología ITIL y nivel de prioridad
 
 components:
-
   securitySchemes:
-    bearerAuth:
+    BearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: >
-        Token JWT obtenido mediante /auth/login. Debe enviarse en el
-        encabezado Authorization como "Bearer {token}".
 
-  parameters:
-    IdTicketParam:
-      name: idTicket
-      in: path
-      required: true
-      description: Identificador único del ticket
-      schema:
-        type: integer
-        example: 17
+  responses:
+    400BadRequest:
+      description: Petición inválida o error de validación de campos
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    401Unauthorized:
+      description: Token JWT no proporcionado, expirado o inválido
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    404NotFound:
+      description: Recurso no encontrado en la base de datos
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
 
   schemas:
-
-    LoginRequest:
+    LoginInput:
       type: object
-      required: [correo, password]
+      required:
+        - correo
+        - contrasenia
       properties:
         correo:
           type: string
           format: email
-          example: sgomar@miumg.edu.gt
-        password:
+          example: estudiante@miumg.edu.gt
+        contrasenia:
           type: string
           format: password
-          example: "123456"
+          example: P@ssword123
 
     LoginResponse:
       type: object
@@ -334,28 +176,24 @@ components:
           type: string
           example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
         usuario:
-          $ref: '#/components/schemas/UsuarioResumen'
+          type: object
+          properties:
+            idUsuario:
+              type: integer
+              example: 5
+            nombre:
+              type: string
+              example: Carlos Gómez
+            rol:
+              type: string
+              enum: [Estudiante, Agente, Coordinador]
+              example: Estudiante
 
-    UsuarioResumen:
+    TicketInput:
       type: object
-      properties:
-        idUsuario:
-          type: integer
-          example: 9
-        nombreCompleto:
-          type: string
-          example: Sergio Gomar
-        correoInstitucional:
-          type: string
-          example: sgomar@miumg.edu.gt
-        rol:
-          type: string
-          enum: [Estudiante, Agente, Coordinador]
-          example: Estudiante
-
-    CrearTicketRequest:
-      type: object
-      required: [tipologiaITIL, descripcion]
+      required:
+        - tipologiaITIL
+        - descripcion
       properties:
         tipologiaITIL:
           type: string
@@ -363,69 +201,58 @@ components:
           example: Incidente
         descripcion:
           type: string
-          minLength: 10
-          example: No puedo acceder al portal de calificaciones
+          example: No tengo acceso al módulo de asignación de cursos.
         carnetEstudiante:
           type: string
-          description: Requerido únicamente cuando el ticket lo crea un Agente o Coordinador
-          example: "9989-23-11043"
-
-    CrearTicketResponse:
-      type: object
-      properties:
-        message:
-          type: string
-          example: Ticket creado exitosamente
-        ticket:
-          type: object
-          properties:
-            idTicket:
-              type: integer
-              example: 21
-            tipologiaITIL:
-              type: string
-              example: Incidente
-            prioridadSLA:
-              type: string
-              enum: [Alta, Media, Baja]
-              example: Alta
-            estado:
-              type: string
-              example: Abierto
+          description: Requerido obligatoriamente si quien crea el ticket tiene rol Agente/Coordinador.
+          example: 1290-21-4567
 
     Ticket:
       type: object
       properties:
         idTicket:
           type: integer
-          example: 21
-        fechaCreacion:
+          example: 105
+        tipologiaITIL:
           type: string
-          format: date-time
-          example: "2026-05-20T11:31:13.097Z"
+          example: Incidente
+        descripcion:
+          type: string
+          example: No tengo acceso al módulo de asignación de cursos.
         prioridadSLA:
           type: string
           enum: [Alta, Media, Baja]
-          example: Media
-        tipologiaITIL:
-          type: string
-          enum: [Incidente, Solicitud, Cambio]
-          example: Solicitud
+          example: Alta
         estado:
           type: string
           enum: [Abierto, EnProceso, Pendiente, Resuelto, Cerrado]
           example: Abierto
-        descripcion:
-          type: string
-          example: Solicitud de cambio de sección
+        idAgente:
+          type: integer
+          nullable: true
+          example: 2
 
     TicketDetalle:
       allOf:
         - $ref: '#/components/schemas/Ticket'
         - type: object
           properties:
+            fechaCreacion:
+              type: string
+              format: date-time
+              example: '2026-10-01T20:00:00.000Z'
+            idEstudiante:
+              type: integer
+              example: 10
+            carneEstudiante:
+              type: string
+              example: 1290-21-4567
+            nombreEstudiante:
+              type: string
+              example: Juan Pérez
             horasRestantes:
               type: number
+              format: float
               example: 3.5
             vencido:
               type: boolean
@@ -433,70 +260,22 @@ components:
             historial:
               type: array
               items:
-                $ref: '#/components/schemas/HistorialEstado'
-
-    HistorialEstado:
-      type: object
-      properties:
-        estado:
-          type: string
-          example: EnProceso
-        fecha:
-          type: string
-          format: date-time
-          example: "2026-05-20T14:10:00.000Z"
-        comentario:
-          type: string
-          example: Se contactó al estudiante para más información
-
-    CambiarEstadoRequest:
-      type: object
-      required: [nuevoEstado]
-      properties:
-        nuevoEstado:
-          type: string
-          enum: [Abierto, EnProceso, Pendiente, Resuelto, Cerrado]
-          example: Resuelto
-        comentario:
-          type: string
-          example: Se restableció el acceso al portal
-
-    CambiarEstadoResponse:
-      type: object
-      properties:
-        idTicket:
-          type: integer
-          example: 21
-        nuevoEstado:
-          type: string
-          example: Resuelto
-
-    ResponderEncuestaRequest:
-      type: object
-      required: [calificacion]
-      properties:
-        calificacion:
-          type: integer
-          minimum: 1
-          maximum: 5
-          example: 5
-        comentario:
-          type: string
-          example: Excelente atención y tiempo de respuesta
-
-    MensajeResponse:
-      type: object
-      properties:
-        message:
-          type: string
-          example: Encuesta enviada
+                type: object
+                properties:
+                  estado:
+                    type: string
+                    example: Abierto
+                  fecha:
+                    type: string
+                    format: date-time
+                    example: '2026-10-01T20:00:00.000Z'
+                  comentario:
+                    type: string
+                    example: Ticket creado
 
     ErrorResponse:
       type: object
       properties:
         message:
           type: string
-          example: Correo o contraseña incorrectos
-
-security:
-  - bearerAuth: []
+          example: Estudiante no encontrado
