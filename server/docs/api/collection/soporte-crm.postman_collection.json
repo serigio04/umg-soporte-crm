@@ -34,7 +34,7 @@
             "header": [],
             "body": {
               "mode": "raw",
-              "raw": "{\r\n    \"correo\": \"coordinador@miumg.edu.gt\",\r\n    \"password\": \"123456\"\r\n}",
+              "raw": "{\r\n    \"correo\": \"sgomar@miumg.edu.gt\", // sgomar@miumg.edu.gt - coordinador@miumg.edu.gt\r\n    \"password\": \"123456\" \r\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -132,24 +132,227 @@
       "name": "Tickets",
       "item": [
         {
-          "name": "Obtener tickes por id",
+          "name": "Estudiante",
+          "item": [
+            {
+              "name": "Obtener mis tickets",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{StudentToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{server url}}/api/tickets",
+                  "host": [
+                    "{{server url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "tickets"
+                  ]
+                }
+              },
+              "response": [
+                {
+                  "name": "Obtener mis tickets",
+                  "originalRequest": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{server url}}/api/tickets",
+                      "host": [
+                        "{{server url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "tickets"
+                      ]
+                    }
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": null,
+                  "header": [
+                    {
+                      "key": "X-Powered-By",
+                      "value": "Express"
+                    },
+                    {
+                      "key": "Access-Control-Allow-Origin",
+                      "value": "http://localhost:5173"
+                    },
+                    {
+                      "key": "Vary",
+                      "value": "Origin"
+                    },
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json; charset=utf-8"
+                    },
+                    {
+                      "key": "Content-Length",
+                      "value": "3151"
+                    },
+                    {
+                      "key": "ETag",
+                      "value": "W/\"c4f-+nZUtyGVIrCNQ4LqmCCfLLUsr1U\""
+                    },
+                    {
+                      "key": "Date",
+                      "value": "Wed, 21 Oct 2026 01:53:39 GMT"
+                    },
+                    {
+                      "key": "Connection",
+                      "value": "keep-alive"
+                    },
+                    {
+                      "key": "Keep-Alive",
+                      "value": "timeout=5"
+                    }
+                  ],
+                  "cookie": [],
+                  "body": "[\n    {\n        \"idTicket\": 18,\n        \"fechaCreacion\": \"2026-10-02T23:32:24.349Z\",\n        \"prioridadSLA\": \"Alta\",\n        \"tipologiaITIL\": \"Incidente\",\n        \"estado\": \"Abierto\",\n        \"descripcion\": \"estudiante no puede iniciar sesion TEST\",\n        \"ultimoEstado\": \"Abierto\"\n    },\n    {\n        \"idTicket\": 17,\n        \"fechaCreacion\": \"2026-05-23T09:03:05.952Z\",\n        \"prioridadSLA\": \"Baja\",\n        \"tipologiaITIL\": \"Cambio\",\n        \"estado\": \"Cerrado\",\n        \"descripcion\": \"cambio de carrera porque ya me aburri\",\n        \"ultimoEstado\": \"Cerrado\"\n    },\n    {\n        \"idTicket\": 16,\n        \"fechaCreacion\": \"2026-05-23T07:36:39.689Z\",\n        \"prioridadSLA\": \"Media\",\n        \"tipologiaITIL\": \"Solicitud\",\n        \"estado\": \"Resuelto\",\n        \"descripcion\": \"solicitud de cambio de compañeras\",\n        \"ultimoEstado\": \"Resuelto\"\n    },\n    {\n        \"idTicket\": 14,\n        \"fechaCreacion\": \"2026-05-22T13:28:27.920Z\",\n        \"prioridadSLA\": \"Baja\",\n        \"tipologiaITIL\": \"Cambio\",\n        \"estado\": \"Resuelto\",\n        \"descripcion\": \"cambio de ropa\",\n        \"ultimoEstado\": \"Resuelto\"\n    },\n    {\n        \"idTicket\": 13,\n        \"fechaCreacion\": \"2026-05-22T13:22:14.538Z\",\n        \"prioridadSLA\": \"Alta\",\n        \"tipologiaITIL\": \"Incidente\",\n        \"estado\": \"Abierto\",\n        \"descripcion\": \"me quiero morirrrrrrrrr\",\n        \"ultimoEstado\": \"Abierto\"\n    },\n    {\n        \"idTicket\": 12,\n        \"fechaCreacion\": \"2026-05-22T12:35:10.700Z\",\n        \"prioridadSLA\": \"Baja\",\n        \"tipologiaITIL\": \"Cambio\",\n        \"estado\": \"Cerrado\",\n        \"descripcion\": \"cambio de taza de cafe :p\",\n        \"ultimoEstado\": \"Cerrado\"\n    },\n    {\n        \"idTicket\": 10,\n        \"fechaCreacion\": \"2026-05-22T10:16:34.768Z\",\n        \"prioridadSLA\": \"Baja\",\n        \"tipologiaITIL\": \"Cambio\",\n        \"estado\": \"Resuelto\",\n        \"descripcion\": \"Cambio de SO porque la windows ya nadota\",\n        \"ultimoEstado\": \"Resuelto\"\n    },\n    {\n        \"idTicket\": 9,\n        \"fechaCreacion\": \"2026-05-22T10:13:03.225Z\",\n        \"prioridadSLA\": \"Alta\",\n        \"tipologiaITIL\": \"Incidente\",\n        \"estado\": \"Abierto\",\n        \"descripcion\": \"No puedo creer que siga en esto\",\n        \"ultimoEstado\": null\n    },\n    {\n        \"idTicket\": 8,\n        \"fechaCreacion\": \"2026-05-21T22:15:34.487Z\",\n        \"prioridadSLA\": \"Alta\",\n        \"tipologiaITIL\": \"Incidente\",\n        \"estado\": \"Abierto\",\n        \"descripcion\": \"el estudiante murio de tanta tarea\",\n        \"ultimoEstado\": \"Abierto\"\n    },\n    {\n        \"idTicket\": 7,\n        \"fechaCreacion\": \"2026-05-21T21:47:05.837Z\",\n        \"prioridadSLA\": \"Media\",\n        \"tipologiaITIL\": \"Solicitud\",\n        \"estado\": \"EnProceso\",\n        \"descripcion\": \"solicitud de ticket test\",\n        \"ultimoEstado\": \"Escalado\"\n    },\n    {\n        \"idTicket\": 6,\n        \"fechaCreacion\": \"2026-05-20T12:28:25.508Z\",\n        \"prioridadSLA\": \"Baja\",\n        \"tipologiaITIL\": \"Cambio\",\n        \"estado\": \"Abierto\",\n        \"descripcion\": \"cambio de carrera a una mas isi\",\n        \"ultimoEstado\": \"Abierto\"\n    },\n    {\n        \"idTicket\": 5,\n        \"fechaCreacion\": \"2026-05-20T11:31:13.097Z\",\n        \"prioridadSLA\": \"Media\",\n        \"tipologiaITIL\": \"Solicitud\",\n        \"estado\": \"Pendiente\",\n        \"descripcion\": \"solicitud de ticker\",\n        \"ultimoEstado\": \"Pendiente\"\n    },\n    {\n        \"idTicket\": 4,\n        \"fechaCreacion\": \"2026-05-20T09:55:49.863Z\",\n        \"prioridadSLA\": \"Media\",\n        \"tipologiaITIL\": \"Solicitud\",\n        \"estado\": \"Cerrado\",\n        \"descripcion\": \"pueba de prueb DE PUnsss\",\n        \"ultimoEstado\": \"Abierto\"\n    },\n    {\n        \"idTicket\": 3,\n        \"fechaCreacion\": \"2026-05-20T08:47:31.276Z\",\n        \"prioridadSLA\": \"Baja\",\n        \"tipologiaITIL\": \"Cambio\",\n        \"estado\": \"Abierto\",\n        \"descripcion\": \"Ticket de cambio de prueba\",\n        \"ultimoEstado\": \"Abierto\"\n    },\n    {\n        \"idTicket\": 2,\n        \"fechaCreacion\": \"2026-05-20T08:44:15.398Z\",\n        \"prioridadSLA\": \"Alta\",\n        \"tipologiaITIL\": \"Incidente\",\n        \"estado\": \"Abierto\",\n        \"descripcion\": \"test de ticket de incidente\",\n        \"ultimoEstado\": \"Abierto\"\n    },\n    {\n        \"idTicket\": 1,\n        \"fechaCreacion\": \"2026-05-19T10:04:42.021Z\",\n        \"prioridadSLA\": \"Media\",\n        \"tipologiaITIL\": \"Solicitud\",\n        \"estado\": \"Abierto\",\n        \"descripcion\": \"ticket de prueba\",\n        \"ultimoEstado\": \"Abierto\"\n    }\n]"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Obtener tickets abiertos",
           "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{AuthToken}}",
+                  "type": "string"
+                }
+              ]
+            },
             "method": "GET",
-            "header": [
-              {
-                "key": "",
-                "value": "",
-                "type": "text"
-              }
-            ],
+            "header": [],
             "url": {
-              "raw": "{{server url}}/estudiante/tickets",
+              "raw": "{{server url}}/api/tickets/abiertos",
               "host": [
                 "{{server url}}"
               ],
               "path": [
-                "estudiante",
-                "tickets"
+                "api",
+                "tickets",
+                "abiertos"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Obtener tickets abiertos",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{server url}}/api/tickets/abiertos",
+                  "host": [
+                    "{{server url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "tickets",
+                    "abiertos"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "X-Powered-By",
+                  "value": "Express"
+                },
+                {
+                  "key": "Access-Control-Allow-Origin",
+                  "value": "http://localhost:5173"
+                },
+                {
+                  "key": "Vary",
+                  "value": "Origin"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                },
+                {
+                  "key": "Content-Length",
+                  "value": "2161"
+                },
+                {
+                  "key": "ETag",
+                  "value": "W/\"871-nr7rsLzDEaqQziPCBjwuQ9O7B4M\""
+                },
+                {
+                  "key": "Date",
+                  "value": "Wed, 21 Oct 2026 01:48:20 GMT"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Keep-Alive",
+                  "value": "timeout=5"
+                }
+              ],
+              "cookie": [],
+              "body": "[\n    {\n        \"idTicket\": 18,\n        \"fechaCreacion\": \"2026-10-02T23:32:24.349Z\",\n        \"prioridadSLA\": \"Alta\",\n        \"tipologiaITIL\": \"Incidente\",\n        \"estado\": \"Abierto\",\n        \"descripcion\": \"estudiante no puede iniciar sesion TEST\",\n        \"carneEstudiante\": \"99892311043\",\n        \"nombreEstudiante\": \"Sergio Gomar\"\n    },\n    {\n        \"idTicket\": 15,\n        \"fechaCreacion\": \"2026-05-22T13:51:45.363Z\",\n        \"prioridadSLA\": \"Alta\",\n        \"tipologiaITIL\": \"Incidente\",\n        \"estado\": \"Abierto\",\n        \"descripcion\": \"hola estas en mora debes pagar con tu alma\",\n        \"carneEstudiante\": \"99892311045\",\n        \"nombreEstudiante\": \"Claudia de Leon\"\n    },\n    {\n        \"idTicket\": 13,\n        \"fechaCreacion\": \"2026-05-22T13:22:14.538Z\",\n        \"prioridadSLA\": \"Alta\",\n        \"tipologiaITIL\": \"Incidente\",\n        \"estado\": \"Abierto\",\n        \"descripcion\": \"me quiero morirrrrrrrrr\",\n        \"carneEstudiante\": \"99892311043\",\n        \"nombreEstudiante\": \"Sergio Gomar\"\n    },\n    {\n        \"idTicket\": 9,\n        \"fechaCreacion\": \"2026-05-22T10:13:03.225Z\",\n        \"prioridadSLA\": \"Alta\",\n        \"tipologiaITIL\": \"Incidente\",\n        \"estado\": \"Abierto\",\n        \"descripcion\": \"No puedo creer que siga en esto\",\n        \"carneEstudiante\": \"99892311043\",\n        \"nombreEstudiante\": \"Sergio Gomar\"\n    },\n    {\n        \"idTicket\": 8,\n        \"fechaCreacion\": \"2026-05-21T22:15:34.487Z\",\n        \"prioridadSLA\": \"Alta\",\n        \"tipologiaITIL\": \"Incidente\",\n        \"estado\": \"Abierto\",\n        \"descripcion\": \"el estudiante murio de tanta tarea\",\n        \"carneEstudiante\": \"99892311043\",\n        \"nombreEstudiante\": \"Sergio Gomar\"\n    },\n    {\n        \"idTicket\": 6,\n        \"fechaCreacion\": \"2026-05-20T12:28:25.508Z\",\n        \"prioridadSLA\": \"Baja\",\n        \"tipologiaITIL\": \"Cambio\",\n        \"estado\": \"Abierto\",\n        \"descripcion\": \"cambio de carrera a una mas isi\",\n        \"carneEstudiante\": \"99892311043\",\n        \"nombreEstudiante\": \"Sergio Gomar\"\n    },\n    {\n        \"idTicket\": 3,\n        \"fechaCreacion\": \"2026-05-20T08:47:31.276Z\",\n        \"prioridadSLA\": \"Baja\",\n        \"tipologiaITIL\": \"Cambio\",\n        \"estado\": \"Abierto\",\n        \"descripcion\": \"Ticket de cambio de prueba\",\n        \"carneEstudiante\": \"99892311043\",\n        \"nombreEstudiante\": \"Sergio Gomar\"\n    },\n    {\n        \"idTicket\": 2,\n        \"fechaCreacion\": \"2026-05-20T08:44:15.398Z\",\n        \"prioridadSLA\": \"Alta\",\n        \"tipologiaITIL\": \"Incidente\",\n        \"estado\": \"Abierto\",\n        \"descripcion\": \"test de ticket de incidente\",\n        \"carneEstudiante\": \"99892311043\",\n        \"nombreEstudiante\": \"Sergio Gomar\"\n    },\n    {\n        \"idTicket\": 1,\n        \"fechaCreacion\": \"2026-05-19T10:04:42.021Z\",\n        \"prioridadSLA\": \"Media\",\n        \"tipologiaITIL\": \"Solicitud\",\n        \"estado\": \"Abierto\",\n        \"descripcion\": \"ticket de prueba\",\n        \"carneEstudiante\": \"99892311043\",\n        \"nombreEstudiante\": \"Sergio Gomar\"\n    }\n]"
+            }
+          ]
+        },
+        {
+          "name": "Obtener tickes por id",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{AuthToken}} ",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{AuthToken}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{server url}}/api/tickets/:idTicket",
+              "host": [
+                "{{server url}}"
+              ],
+              "path": [
+                "api",
+                "tickets",
+                ":idTicket"
+              ],
+              "variable": [
+                {
+                  "key": "idTicket",
+                  "value": "3"
+                }
               ]
             }
           },
@@ -227,78 +430,181 @@
               ],
               "cookie": [],
               "body": "{\n    \"idTicket\": 3,\n    \"fechaCreacion\": \"2026-05-20T08:47:31.276Z\",\n    \"prioridadSLA\": \"Baja\",\n    \"tipologiaITIL\": \"Cambio\",\n    \"estado\": \"Abierto\",\n    \"descripcion\": \"Ticket de cambio de prueba\",\n    \"idEstudiante\": 1,\n    \"carneEstudiante\": \"99892311043\",\n    \"nombreEstudiante\": \"Sergio Gomar\",\n    \"idAgente\": 4,\n    \"horasRestantes\": 0,\n    \"vencido\": true,\n    \"historial\": [\n        {\n            \"estado\": \"Abierto\",\n            \"fecha\": \"2026-05-22T10:23:54.487Z\",\n            \"comentario\": \"Ticket creado\"\n        },\n        {\n            \"estado\": \"Abierto\",\n            \"fecha\": \"2026-05-20T08:47:31.276Z\",\n            \"comentario\": \"Ticket creado\"\n        }\n    ]\n}"
+            },
+            {
+              "name": "Error interno del servidor",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "{{AuthToken}}",
+                    "type": "text",
+                    "disabled": true
+                  }
+                ],
+                "url": {
+                  "raw": "{{server url}}/api/tickets/:idTicket",
+                  "host": [
+                    "{{server url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "tickets",
+                    ":idTicket"
+                  ],
+                  "variable": [
+                    {
+                      "key": "idTicket",
+                      "value": "99"
+                    }
+                  ]
+                }
+              },
+              "status": "Internal Server Error",
+              "code": 500,
+              "_postman_previewlanguage": "",
+              "header": [
+                {
+                  "key": "X-Powered-By",
+                  "value": "Express"
+                },
+                {
+                  "key": "Access-Control-Allow-Origin",
+                  "value": "http://localhost:5173"
+                },
+                {
+                  "key": "Vary",
+                  "value": "Origin"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/problem+json; charset=utf-8"
+                },
+                {
+                  "key": "Content-Length",
+                  "value": "282"
+                },
+                {
+                  "key": "ETag",
+                  "value": "W/\"11a-eeojh1vHMRnqAly5MU+7LlVJYDA\""
+                },
+                {
+                  "key": "Date",
+                  "value": "Thu, 22 Oct 2026 15:41:34 GMT"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Keep-Alive",
+                  "value": "timeout=5"
+                }
+              ],
+              "cookie": [
+                {
+                  "expires": "Invalid Date",
+                  "domain": "",
+                  "path": ""
+                }
+              ],
+              "body": "{\n    \"type\": \"https://api-soporte.miumg.edu.gt/errors/error-interno\",\n    \"title\": \"Error Interno del Servidor\",\n    \"status\": 500,\n    \"detail\": \"Ha ocurrido un error no controlado en el servidor.\",\n    \"instance\": \"/api/tickets/:idTicket\",\n    \"code\": \"INTERNAL_SERVER_ERROR\",\n    \"timestamp\": \"2026-10-22T15:41:34.946Z\"\n}"
+            },
+            {
+              "name": "Ticket no encontrado",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "{{AuthToken}}",
+                    "type": "text",
+                    "disabled": true
+                  }
+                ],
+                "url": {
+                  "raw": "{{server url}}/api/tickets/:idTicket",
+                  "host": [
+                    "{{server url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "tickets",
+                    ":idTicket"
+                  ],
+                  "variable": [
+                    {
+                      "key": "idTicket",
+                      "value": "99"
+                    }
+                  ]
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "X-Powered-By",
+                  "value": "Express"
+                },
+                {
+                  "key": "Access-Control-Allow-Origin",
+                  "value": "http://localhost:5173"
+                },
+                {
+                  "key": "Vary",
+                  "value": "Origin"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/problem+json; charset=utf-8"
+                },
+                {
+                  "key": "Content-Length",
+                  "value": "271"
+                },
+                {
+                  "key": "ETag",
+                  "value": "W/\"10f-z2qmvFaXk9AkzOsmKsuzOuaF52Y\""
+                },
+                {
+                  "key": "Date",
+                  "value": "Thu, 22 Oct 2026 15:42:48 GMT"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Keep-Alive",
+                  "value": "timeout=5"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"type\": \"https://api-soporte.miumg.edu.gt/errors/ticket-no-encontrado\",\n    \"title\": \"Ticket no encontrado\",\n    \"status\": 404,\n    \"detail\": \"No se encontró un ticket con el ID proporcionado.\",\n    \"instance\": \"/api/tickets/99\",\n    \"code\": \"TICKET_NOT_FOUND\",\n    \"timestamp\": \"2026-10-22T15:42:48.172Z\"\n}"
             }
           ]
         },
         {
           "name": "Crear ticket",
           "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{AuthToken}} ",
+                  "type": "string"
+                }
+              ]
+            },
             "method": "POST",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json, text/plain, */*"
-              },
-              {
-                "key": "Accept-Language",
-                "value": "es-419,es;q=0.5"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZFVzdWFyaW8iOjcsInJvbCI6IkFnZW50ZSIsImlhdCI6MTc3OTM3ODYzNCwiZXhwIjoxNzc5NDA3NDM0fQ.S4gmJyHNdEfYO-_Tff-1UBTn-sChlcW_-QdQFhNyUs0"
-              },
-              {
-                "key": "Connection",
-                "value": "keep-alive"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Origin",
-                "value": "http://localhost:5173"
-              },
-              {
-                "key": "Referer",
-                "value": "http://localhost:5173/"
-              },
-              {
-                "key": "Sec-Fetch-Dest",
-                "value": "empty"
-              },
-              {
-                "key": "Sec-Fetch-Mode",
-                "value": "cors"
-              },
-              {
-                "key": "Sec-Fetch-Site",
-                "value": "same-site"
-              },
-              {
-                "key": "Sec-GPC",
-                "value": "1"
-              },
-              {
-                "key": "User-Agent",
-                "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
-              },
-              {
-                "key": "sec-ch-ua",
-                "value": "\"Brave\";v=\"147\", \"Not.A/Brand\";v=\"8\", \"Chromium\";v=\"147\""
-              },
-              {
-                "key": "sec-ch-ua-mobile",
-                "value": "?0"
-              },
-              {
-                "key": "sec-ch-ua-platform",
-                "value": "\"macOS\""
-              }
-            ],
+            "header": [],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"tipologiaITIL\":\"Incidente\",\n    \"descripcion\":\"estudiante no puede iniciar sesion TEST\",\n    \"idEstudiante\":99892311043\n}",
+              "raw": "{\n    \"tipologiaITIL\":\"Incidente\",\n    \"descripcion\":\"estudiante no puede iniciar sesion TEST\",\n    \"carnetEstudiante\":99892311043\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -389,6 +695,195 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Metricas",
+      "item": [
+        {
+          "name": "Obtener metricas",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{AuthToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{server url}}/api/metricas/",
+              "host": [
+                "{{server url}}"
+              ],
+              "path": [
+                "api",
+                "metricas",
+                ""
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Obtener metricas",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{server url}}/api/metricas/",
+                  "host": [
+                    "{{server url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "metricas",
+                    ""
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "X-Powered-By",
+                  "value": "Express"
+                },
+                {
+                  "key": "Access-Control-Allow-Origin",
+                  "value": "http://localhost:5173"
+                },
+                {
+                  "key": "Vary",
+                  "value": "Origin"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                },
+                {
+                  "key": "Content-Length",
+                  "value": "262"
+                },
+                {
+                  "key": "ETag",
+                  "value": "W/\"106-j6WlaIcfOTw6aatf7LXmeD6tg1I\""
+                },
+                {
+                  "key": "Date",
+                  "value": "Wed, 21 Oct 2026 04:32:27 GMT"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Keep-Alive",
+                  "value": "timeout=5"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"tiempoPromedioResolucionHoras\": \"15.53138256024305556389\",\n    \"ticketsAbiertos\": 9,\n    \"ticketsResueltos\": 3,\n    \"ticketsCerrados\": 3,\n    \"ticketsEnProceso\": 2,\n    \"calificacionGeneral\": {\n        \"promedio_calificacion\": \"4.5000000000000000\",\n        \"porcentaje_calificacion\": \"90.00000000000000000000\"\n    }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Obtener clasificacion de tickets",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{AuthToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{server url}}/api/metricas/tickets/clasificacion",
+              "host": [
+                "{{server url}}"
+              ],
+              "path": [
+                "api",
+                "metricas",
+                "tickets",
+                "clasificacion"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Obtener clasificacion de tickets",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{server url}}/api/metricas/tickets/clasificacion",
+                  "host": [
+                    "{{server url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "metricas",
+                    "tickets",
+                    "clasificacion"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "X-Powered-By",
+                  "value": "Express"
+                },
+                {
+                  "key": "Access-Control-Allow-Origin",
+                  "value": "http://localhost:5173"
+                },
+                {
+                  "key": "Vary",
+                  "value": "Origin"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                },
+                {
+                  "key": "Content-Length",
+                  "value": "44"
+                },
+                {
+                  "key": "ETag",
+                  "value": "W/\"2c-B9Looe7cc3/TB24CDHEEwEhrINI\""
+                },
+                {
+                  "key": "Date",
+                  "value": "Wed, 21 Oct 2026 05:19:32 GMT"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Keep-Alive",
+                  "value": "timeout=5"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"incidentes\": 6,\n    \"solicitudes\": 5,\n    \"cambios\": 7\n}"
+            }
+          ]
+        }
+      ]
     }
   ],
   "event": [
@@ -426,6 +921,10 @@
     },
     {
       "key": "AuthToken",
+      "value": ""
+    },
+    {
+      "key": "StudentToken",
       "value": ""
     }
   ]
