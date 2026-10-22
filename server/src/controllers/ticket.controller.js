@@ -1,12 +1,22 @@
 const ticketService = require('../services/ticket.service')
 const { pool } = require('../config/db')
 
+//Handler de errores
+const ProblemDetailError = require('../utils/ProblemDetails');
+
 // ─── crearTicket ─────────────────────────────────────────────────────────────
 const crearTicket = async (req, res) => {
   const { tipologiaITIL, descripcion, carnetEstudiante } = req.body
 
-  if (!tipologiaITIL || !descripcion)
-    return res.status(400).json({ message: 'Tipología y descripción son requeridos' })
+  if (!tipologiaITIL || !descripcion){
+    throw new ProblemDetailError({
+      status: 400,
+      title: 'Solicitud Inválida',
+      detail: 'Los campos tipologiaITIL y descripcion son obligatorios.',
+      type: 'campos-requeridos',
+      code: 'MISSING_REQUIRED_FIELDS'
+    });
+  }
 
   try {
     let carnet = carnetEstudiante
@@ -17,10 +27,24 @@ const crearTicket = async (req, res) => {
         `SELECT carne FROM estudiante WHERE idusuario = $1 LIMIT 1`,
         [req.usuario.idUsuario]
       )
-      if (est.rows.length === 0) return res.status(404).json({ message: 'Estudiante no encontrado' })
+      if (est.rows.length === 0) {
+        throw new ProblemDetailError({
+          status: 404,
+          title: 'Estudiante no encontrado',
+          detail: 'No se encontró un estudiante asociado al usuario.',
+          type: 'estudiante-no-encontrado',
+          code: 'STUDENT_NOT_FOUND'
+        });
+      }
       carnet = est.rows[0].carne
     } else if (!carnetEstudiante) {
-      return res.status(400).json({ message: 'Se requiere carnet del estudiante' })
+      throw new ProblemDetailError({
+        status: 400,
+        title: 'Solicitud Inválida',
+        detail: 'Se requiere el carnet del estudiante.',
+        type: 'carnet-requerido',
+        code: 'STUDENT_CARD_REQUIRED'
+      });
     }
 
     const ticket = await ticketService.crearTicket({
@@ -32,10 +56,23 @@ const crearTicket = async (req, res) => {
     })
     res.status(201).json({ message: 'Ticket creado exitosamente', ticket })
   } catch (err) {
-    if (err.message === 'ESTUDIANTE_NO_ENCONTRADO')
-      return res.status(404).json({ message: 'Estudiante no encontrado' })
+    if (err.message === 'ESTUDIANTE_NO_ENCONTRADO'){
+      throw new ProblemDetailError({
+        status: 404,
+        title: 'Estudiante no encontrado',
+        detail: 'No se encontró un estudiante con el carnet proporcionado.',
+        type: 'estudiante-no-encontrado',
+        code: 'STUDENT_NOT_FOUND'
+      });
+    }
     console.error('Error creando ticket:', err)
-    res.status(500).json({ message: 'Error interno del servidor' })
+    throw new ProblemDetailError({
+      status: 500,
+      title: 'Error Interno del Servidor',
+      detail: 'Ha ocurrido un error no controlado en el servidor.',
+      type: 'error-interno',
+      code: 'INTERNAL_SERVER_ERROR'
+    });
   }
 }
 
@@ -46,7 +83,13 @@ const obtenerMisTickets = async (req, res) => {
     res.json(tickets)
   } catch (err) {
     console.error('Error obteniendo tickets:', err)
-    res.status(500).json({ message: 'Error interno' })
+    throw new ProblemDetailError({
+      status: 500,
+      title: 'Error Interno del Servidor',
+      detail: 'Ha ocurrido un error no controlado en el servidor.',
+      type: 'error-interno',
+      code: 'INTERNAL_SERVER_ERROR'
+    });
   }
 }
 
@@ -56,8 +99,14 @@ const obtenerUltimoTicket = async (req, res) => {
     const ticket = await ticketService.obtenerUltimoTicket(req.usuario.idUsuario)
     res.json(ticket) // null si no tiene tickets
   } catch (err) {
-    console.error('Error obteniendo último ticket:', err)
-    res.status(500).json({ message: 'Error interno del servidor' })
+    console.error('Error obteniendo último ticket:', err);
+    throw new ProblemDetailError({
+      status: 500,
+      title: 'Error Interno del Servidor',
+      detail: 'Ha ocurrido un error no controlado en el servidor.',
+      type: 'error-interno',
+      code: 'INTERNAL_SERVER_ERROR'
+    });
   }
 }
 
@@ -67,17 +116,43 @@ const obtenerDetalle = async (req, res) => {
   try {
     const idTicketInt = Number(idTicket);
     if (!Number.isInteger(idTicketInt) || Number.isNaN(idTicketInt)) {
-      return res.status(400).json({ message: 'ID de ticket inválido' });
+      throw new ProblemDetailError({
+        status: 400,
+        title: 'ID de ticket inválido',
+        detail: 'El ID del ticket proporcionado no es válido.',
+        type: 'id-ticket-invalido',
+        code: 'INVALID_TICKET_ID'
+      });
     }
     const ticket = await ticketService.obtenerDetalleTicket(idTicketInt);
     res.status(200).json(ticket);
   } catch (err) {
-    if (err.message === 'TICKET_NO_ENCONTRADO')
-      return res.status(404).json({ message: 'Ticket no encontrado' });
-    if (err.message === 'ID_TICKET_INVALIDO')
-      return res.status(400).json({ message: 'ID de ticket inválido' });
+    if (err.message === 'TICKET_NO_ENCONTRADO') {
+      throw new ProblemDetailError({
+        status: 404,
+        title: 'Ticket no encontrado',
+        detail: 'No se encontró un ticket con el ID proporcionado.',
+        type: 'ticket-no-encontrado',
+        code: 'TICKET_NOT_FOUND'
+      });
+    }
+    if (err.message === 'ID_TICKET_INVALIDO') {
+      throw new ProblemDetailError({
+        status: 400,
+        title: 'ID de ticket inválido',
+        detail: 'El ID del ticket proporcionado no es válido.',
+        type: 'id-ticket-invalido',
+        code: 'INVALID_TICKET_ID'
+      });
+    }
     console.error('Error:', err);
-    res.status(500).json({ message: 'Error interno' });
+    throw new ProblemDetailError({
+      status: 500,
+      title: 'Error Interno del Servidor',
+      detail: 'Ha ocurrido un error no controlado en el servidor.',
+      type: 'error-interno',
+      code: 'INTERNAL_SERVER_ERROR'
+    });
   }
 }
 
@@ -86,19 +161,41 @@ const cambiarEstado = async (req, res) => {
   const { idTicket } = req.params
   const { nuevoEstado, comentario } = req.body
 
-  if (!nuevoEstado) return res.status(400).json({ message: 'Estado requerido' })
+  if (!nuevoEstado) {
+    throw new ProblemDetailError({
+      status: 400,
+      title: 'Estado requerido',
+      detail: 'El estado del ticket es requerido.',
+      type: 'estado-requerido',
+      code: 'STATE_REQUIRED'
+    });
+  }
 
   try {
     const idTicketInt = Number(idTicket)
-    if (!Number.isInteger(idTicketInt) || Number.isNaN(idTicketInt))
-      return res.status(400).json({ message: 'ID de ticket inválido' })
+    if (!Number.isInteger(idTicketInt) || Number.isNaN(idTicketInt)) {
+      throw new ProblemDetailError({
+        status: 400,
+        title: 'ID de ticket inválido',
+        detail: 'El ID del ticket proporcionado no es válido.',
+        type: 'id-ticket-invalido',
+        code: 'INVALID_TICKET_ID'
+      });
+    }
 
     const ticket = await pool.query(
       `SELECT idestudiante FROM tickets WHERE idticket = $1`,
       [idTicketInt]
     )
-    if (ticket.rows.length === 0)
-      return res.status(404).json({ message: 'Ticket no encontrado' })
+    if (ticket.rows.length === 0) {
+      throw new ProblemDetailError({
+        status: 404,
+        title: 'Ticket no encontrado',
+        detail: 'No se encontró un ticket con el ID proporcionado.',
+        type: 'ticket-no-encontrado',
+        code: 'TICKET_NOT_FOUND'
+      });
+    }
 
     const resultado = await ticketService.cambiarEstadoTicket(
       idTicketInt,
@@ -109,9 +206,21 @@ const cambiarEstado = async (req, res) => {
     res.json(resultado)
   } catch (err) {
     if (err.message === 'ESTADO_INVALIDO')
-      return res.status(400).json({ message: 'Estado inválido' })
-    console.error('Error:', err)
-    res.status(500).json({ message: 'Error interno' })
+      throw new ProblemDetailError({
+        status: 400,
+        title: 'Estado inválido',
+        detail: 'l estado proporcionado no es válido.',
+        type: 'estado-invalido',
+        code: 'INVALID_STATE'
+      });
+    console.error('Error:', err);
+    throw new ProblemDetailError({
+      status: 500,
+      title: 'Error Interno del Servidor',
+      detail: 'Ha ocurrido un error no controlado en el servidor.',
+      type: 'error-interno',
+      code: 'INTERNAL_SERVER_ERROR'
+    });
   }
 }
 
@@ -121,14 +230,27 @@ const obtenerHistorialAgente = async (req, res) => {
       `SELECT idagente FROM agentes WHERE idusuario = $1`,
       [req.usuario.idUsuario]
     );
-    if (agente.rows.length === 0)
-      return res.status(404).json({ message: 'Agente no encontrado' });
-    
+    if (agente.rows.length === 0) {
+      throw new ProblemDetailError({
+        status: 404,
+        title: 'Agente no encontrado',
+        detail: 'No se encontró un agente con el ID de usuario proporcionado.',
+        type: 'agente-no-encontrado',
+        code: 'AGENT_NOT_FOUND'
+      });
+    }
+
     const historial = await ticketService.obtenerHistorialTicketsAgente(agente.rows[0].idagente);
     res.json(historial);
   } catch (err) {
     console.error('Error:', err);
-    res.status(500).json({ message: 'Error interno' });
+    throw new ProblemDetailError({
+      status: 500,
+      title: 'Error Interno del Servidor',
+      detail: 'Ha ocurrido un error no controlado en el servidor.',
+      type: 'error-interno',
+      code: 'INTERNAL_SERVER_ERROR'
+    });
   };
 };
 
@@ -141,9 +263,21 @@ const escalar = async (req, res) => {
     res.json(resultado)
   } catch (err) {
     if (err.message === 'COORDINADOR_NO_ENCONTRADO')
-      return res.status(404).json({ message: 'No se encontró un coordinador activo' })
-    console.error('Error escalando ticket:', err)
-    res.status(500).json({ message: 'Error interno' })
+      throw new ProblemDetailError({
+        status: 404,
+        title: 'Coordinador no encontrado',
+        detail: 'No se encontró un coordinador activo.',
+        type: 'coordinador-no-encontrado',
+        code: 'COORDINATOR_NOT_FOUND'
+      });
+    console.error('Error escalando ticket:', err);
+    throw new ProblemDetailError({
+      status: 500,
+      title: 'Error Interno del Servidor',
+      detail: 'Ha ocurrido un error no controlado en el servidor.',
+      type: 'error-interno',
+      code: 'INTERNAL_SERVER_ERROR'
+    });
   }
 }
 
@@ -155,11 +289,29 @@ const aceptarResolucion = async (req, res) => {
     res.json(resultado);
   } catch (err) {
     if (err.message === 'TICKET_NO_ENCONTRADO')
-      return res.status(404).json({ message: 'Ticket no encontrado o no te pertenece' });
+      throw new ProblemDetailError({
+        status: 404,
+        title: 'Ticket no encontrado',
+        detail: 'No se encontró el ticket o no te pertenece.',
+        type: 'ticket-no-encontrado',
+        code: 'TICKET_NOT_FOUND'
+      });
     if (err.message === 'TICKET_NO_RESUELTO')
-      return res.status(400).json({ message: 'El ticket no está en estado Resuelto' });
+      throw new ProblemDetailError({
+        status: 400,
+        title: 'Ticket no resuelto',
+        detail: 'El ticket no está en estado Resuelto.',
+        type: 'ticket-no-resuelto',
+        code: 'TICKET_NOT_RESOLVED'
+      });
     console.error('Error al aceptar resolución:', err);
-    res.status(500).json({ message: 'Error interno' });
+    throw new ProblemDetailError({
+      status: 500,
+      title: 'Error Interno del Servidor',
+      detail: 'Ha ocurrido un error no controlado en el servidor.',
+      type: 'error-interno',
+      code: 'INTERNAL_SERVER_ERROR'
+    });
   }
 };
 
@@ -169,7 +321,13 @@ const obtenerTicketsAbiertos = async (req, res) => {
     res.json(tickets);
   } catch (err) {
     console.error('Error:', err);
-    res.status(500).json({ message: 'Error interno' });
+    throw new ProblemDetailError({
+      status: 500,
+      title: 'Error Interno del Servidor',
+      detail: 'Ha ocurrido un error no controlado en el servidor.',
+      type: 'error-interno',
+      code: 'INTERNAL_SERVER_ERROR'
+    });
   }
 }
 

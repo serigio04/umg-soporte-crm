@@ -6,6 +6,9 @@ const swaggerUi = require('swagger-ui-express');
 const YAML = require('yamljs');
 const path = require('path');
 
+//middleware para manejar errores
+const handleErrors = require('./middlewares/errorHandler.middleware');
+
 const app = express();
 
 app.use(cors({ origin: 'http://localhost:5173' })); // puerto de Vite
@@ -31,6 +34,8 @@ app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Servidor corriendo' });
 });
+
+app.use(handleErrors);
 
 const PORT = process.env.PORT || 3000;
 

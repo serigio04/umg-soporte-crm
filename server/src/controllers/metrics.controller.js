@@ -1,12 +1,21 @@
 const metricsService = require('../services/metrics.service')
 
+// Handler errors
+const ProblemDetailsError = require('../utils/ProblemDetails');
+
 const obtenerDashboardCoordinador = async (req, res) => {
   try {
     const metricas = await metricsService.obtenerMetricasCoordinador()
     res.json(metricas)
   } catch (err) {
     console.error('Error obteniendo métricas coordinador:', err)
-    res.status(500).json({ message: 'Error interno del servidor' })
+    throw new ProblemDetailsError({
+      status: 500,
+      title: 'Error Interno del Servidor',
+      detail: 'Ha ocurrido un error no controlado en el servidor.',
+      type: 'error-interno',
+      code: 'INTERNAL_SERVER_ERROR'
+    });
   }
 }
 
@@ -17,7 +26,13 @@ const obtenerMetricasAgente = async (req, res) => {
     res.json(metricas)
   } catch (err) {
     console.error('Error obteniendo métricas agente:', err)
-    res.status(500).json({ message: 'Error interno del servidor' })
+    throw new ProblemDetailsError({
+      status: 500,
+      title: 'Error Interno del Servidor',
+      detail: 'Ha ocurrido un error no controlado en el servidor.',
+      type: 'error-interno',
+      code: 'INTERNAL_SERVER_ERROR'
+    });
   }
 }
 
@@ -143,7 +158,13 @@ const obtenerMetricas = async (req, res) => {
   }
   catch (err) {
     console.error('Error obteniendo métricas:', err);
-    res.status(500).json({ message: 'Error interno del servidor' });
+    throw new ProblemDetailsError({
+      status: 500,
+      title: 'Error Interno del Servidor',
+      detail: 'Ha ocurrido un error no controlado en el servidor.',
+      type: 'error-interno',
+      code: 'INTERNAL_SERVER_ERROR'
+    });
   }
 }
 
@@ -154,7 +175,13 @@ const obtenerMetricasTickets = async (req, res) => {
   }
   catch (err) {
     console.error('Error obteniendo métricas de tickets:', err);
-    res.status(500).json({ message: 'Error interno del servidor' });
+    throw new ProblemDetailsError({
+      status: 500,
+      title: 'Error Interno del Servidor',
+      detail: 'Ha ocurrido un error no controlado en el servidor.',
+      type: 'error-interno',
+      code: 'INTERNAL_SERVER_ERROR'
+    });
   }
 }
 
