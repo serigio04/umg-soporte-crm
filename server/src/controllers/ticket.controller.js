@@ -127,6 +127,7 @@ const obtenerDetalle = async (req, res) => {
     const ticket = await ticketService.obtenerDetalleTicket(idTicketInt);
     res.status(200).json(ticket);
   } catch (err) {
+    if (err instanceof ProblemDetailError) throw err;
     if (err.message === 'TICKET_NO_ENCONTRADO') {
       throw new ProblemDetailError({
         status: 404,
