@@ -1,6 +1,6 @@
 const path = require('node:path')
 
-const serverRoot = path.resolve(__dirname, '../..')
+const serverRoot = path.resolve(__dirname, '../../..')
 
 function loadWithMocks(target, mocks) {
   const originals = new Map()

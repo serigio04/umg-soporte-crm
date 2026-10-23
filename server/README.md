@@ -120,15 +120,15 @@ Deberías recibir:
 
 ---
 
-## Pruebas unitarias
+## Pruebas
 
-Desde la carpeta `server`, ejecuta:
+Desde la carpeta `server`, ejecuta todas las pruebas con:
 
 ```bash
 npm test
 ```
 
-Las pruebas usan el runner nativo de Node.js y cubren tickets y métricas en controllers, rutas y services. Las consultas y dependencias externas se simulan, por lo que no requieren conexión a PostgreSQL.
+La carpeta `test/` separa `unit/` e `integration/`. Las pruebas unitarias cubren tickets y métricas en controllers, rutas y services. Las de integración levantan Express y verifican solicitudes HTTP pasando por rutas, autenticación, controllers y services. PostgreSQL se simula para que no se requiera una base de datos ni credenciales para ejecutar las pruebas.
 
 ---
 
@@ -137,10 +137,14 @@ Las pruebas usan el runner nativo de Node.js y cubren tickets y métricas en con
 ```
 .
 ├── test/
-│   ├── controllers/
-│   ├── routes/
-│   └── services/
-├── test-helpers/                  # Mocks para aislar dependencias en pruebas
+│   ├── integration/
+│   │   ├── metrics.integration.test.js
+│   │   └── tickets.integration.test.js
+│   └── unit/
+│       ├── controllers/
+│       ├── routes/
+│       ├── services/
+│       └── test-helpers/
 ├── src/
 │   ├── config/
 │   │   └── db.js                  # Conexión y pool (pg) — usa DB_CONNECTION
