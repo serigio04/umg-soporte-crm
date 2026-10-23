@@ -120,10 +120,27 @@ Deberías recibir:
 
 ---
 
+## Pruebas unitarias
+
+Desde la carpeta `server`, ejecuta:
+
+```bash
+npm test
+```
+
+Las pruebas usan el runner nativo de Node.js y cubren tickets y métricas en controllers, rutas y services. Las consultas y dependencias externas se simulan, por lo que no requieren conexión a PostgreSQL.
+
+---
+
 ## Estructura del proyecto
 
 ```
 .
+├── test/
+│   ├── controllers/
+│   ├── routes/
+│   └── services/
+├── test-helpers/                  # Mocks para aislar dependencias en pruebas
 ├── src/
 │   ├── config/
 │   │   └── db.js                  # Conexión y pool (pg) — usa DB_CONNECTION
