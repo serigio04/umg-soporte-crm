@@ -39,8 +39,12 @@ app.use(handleErrors);
 
 const PORT = process.env.PORT || 3000;
 
-initDB().then(() => {
-  app.listen(PORT, () => {
-    console.log(`Servidor corriendo en http://localhost:${PORT}`);
+if (require.main === module) {
+  initDB().then(() => {
+    app.listen(PORT, () => {
+      console.log(`Servidor corriendo en http://localhost:${PORT}`);
+    });
   });
-});
+}
+
+module.exports = app;

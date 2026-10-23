@@ -130,6 +130,16 @@ npm test
 
 La carpeta `test/` separa `unit/` e `integration/`. Las pruebas unitarias cubren tickets y métricas en controllers, rutas y services. Las de integración levantan Express y verifican solicitudes HTTP pasando por rutas, autenticación, controllers y services. PostgreSQL se simula para que no se requiera una base de datos ni credenciales para ejecutar las pruebas.
 
+### E2E de tickets
+
+Los E2E levantan la API real y escriben en PostgreSQL. Ejecútalos únicamente contra una base de datos de pruebas con un usuario estudiante existente, configurando `DB_CONNECTION`, `JWT_SECRET`, `E2E_STUDENT_USER_ID` y `E2E_CONFIRM_WRITE=true` en el entorno. Luego, desde `server`, ejecuta:
+
+```bash
+npm run test:e2e
+```
+
+Los tickets creados por los E2E se identifican con un prefijo único y se eliminan junto con su historial y encuestas al terminar. Sin la configuración de prueba y la confirmación explícita, la suite se omite.
+
 ---
 
 ## Estructura del proyecto
@@ -137,6 +147,8 @@ La carpeta `test/` separa `unit/` e `integration/`. Las pruebas unitarias cubren
 ```
 .
 ├── test/
+│   ├── e2e/
+│   │   └── tickets.e2e.test.js
 │   ├── integration/
 │   │   ├── metrics.integration.test.js
 │   │   └── tickets.integration.test.js
