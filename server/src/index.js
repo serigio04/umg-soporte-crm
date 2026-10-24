@@ -1,11 +1,17 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const http = require('http');
 const { initDB } = require('./config/db');
+const { iniciarRealtime } = require('./realtime');
 
 const app = express();
+const server = http.createServer(app);
+const origins = (process.env.CORS_ORIGIN || 'http://localhost:5173')
+  .split(',')
+  .map(origin => origin.trim());
 
-app.use(cors({ origin: 'http://localhost:5173' })); // puerto de Vite
+app.use(cors({ origin: origins }));
 app.use(express.json());
 
 //rutas
@@ -26,7 +32,8 @@ app.get('/api/health', (req, res) => {
 const PORT = process.env.PORT || 3000;
 
 initDB().then(() => {
-  app.listen(PORT, () => {
+  iniciarRealtime(server);
+  server.listen(PORT, () => {
     console.log(`Servidor corriendo en http://localhost:${PORT}`);
   });
 });

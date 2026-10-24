@@ -18,6 +18,8 @@ const obtenerTicketPrioridad = async (req, res) => {
     const ticket = await agenteService.obtenerTicketPrioridad(idAgente)
     res.json(ticket)
   } catch (err) {
+    if (err.message === 'ID_AGENTE_INVALIDO')
+      return res.status(400).json({ message: 'ID de agente inválido' })
     console.error('Error obteniendo ticket prioridad:', err)
     res.status(500).json({ message: 'Error interno del servidor' })
   }
@@ -29,6 +31,8 @@ const obtenerTicketsAsignados = async (req, res) => {
     const tickets = await agenteService.obtenerTicketsAsignados(idAgente)
     res.json(tickets)
   } catch (err) {
+    if (err.message === 'ID_AGENTE_INVALIDO')
+      return res.status(400).json({ message: 'ID de agente inválido' })
     console.error('Error obteniendo tickets asignados:', err)
     res.status(500).json({ message: 'Error interno del servidor' })
   }

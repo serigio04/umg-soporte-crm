@@ -19,10 +19,13 @@ import CrearEstudiante from './pages/CrearEstudiante';
 import DashboardCoordinador from './pages/DashboardCoordinador';
 import TicketsCoordinador from './pages/HistorialTicketsCoordinador';
 import EncuestaTicket from './pages/EncuestaTicket';
+import NoEncontrado from './pages/NoEncontrado';
+import GestionAgentes from './pages/GestionAgentes';
 
 function App() {
   return (
     <BrowserRouter>
+      <a className="skip-link" href="#contenido-principal">Saltar al contenido</a>
       <Routes>
         {/* Rutas Públicas */}
         <Route path="/" element={<Navigate to="/login" />} />
@@ -42,15 +45,17 @@ function App() {
           <Route path="/agente/tickets" element={<TicketsAsignados />} />
           <Route path="/agente/tickets/historial" element={<HistorialTicketsAgente />} />
           <Route path="/agente/conocimiento" element={<GestionConocimiento />} />
-          <Route path="/agente/crear-agente" element={<CrearAgente />} />
-          <Route path="/agente/crear-estudiante" element={<CrearEstudiante />} />
         </Route>
 
         {/* Rutas Protegidas únicamente para Coordinador */}
         <Route element={<RutaProtegida rolesPermitidos={['Coordinador']} />}>
           <Route path="/coordinador/dashboard" element={<DashboardCoordinador />} />
           <Route path="/coordinador/tickets" element={<TicketsCoordinador />} />
+          <Route path="/coordinador/agentes" element={<GestionAgentes />} />
+          <Route path="/agente/crear-agente" element={<CrearAgente />} />
+          <Route path="/agente/crear-estudiante" element={<CrearEstudiante />} />
         </Route>
+        <Route path="*" element={<NoEncontrado />} />
 
         {/* Rutas Compartidas Autenticadas (ambos roles pueden crear/ver detalles de tickets) */}
         <Route element={<RutaProtegida rolesPermitidos={['Estudiante', 'Agente', 'Coordinador']} />}>

@@ -5,9 +5,14 @@ const obtenerMetricasCoordinador = async () => {
   const tiempoResQuery = await pool.query(`
     SELECT AVG(EXTRACT(EPOCH FROM (h_fin.fechacambio - t.fechacreacion))/3600) as tiempo_promedio_horas
     FROM tickets t
-    JOIN estadosticket h_fin ON t.idticket = h_fin.idticket
-    WHERE h_fin.nombreestado IN ('Resuelto', 'Cerrado')
-      AND t.estado IN ('Resuelto', 'Cerrado')
+    JOIN LATERAL (
+      SELECT e.fechacambio
+      FROM estadosticket e
+      WHERE e.idticket = t.idticket AND e.nombreestado IN ('Resuelto', 'Cerrado')
+      ORDER BY e.fechacambio ASC, e.idestado ASC
+      LIMIT 1
+    ) h_fin ON TRUE
+    WHERE t.estado IN ('Resuelto', 'Cerrado')
   `)
 
   // 1.5 Tiempo de resolución promedio por agente
@@ -16,9 +21,14 @@ const obtenerMetricasCoordinador = async () => {
     FROM tickets t
     JOIN agentes a ON t.idagente = a.idagente
     JOIN usuarios u ON a.idusuario = u.idusuario
-    JOIN estadosticket h_fin ON t.idticket = h_fin.idticket
-    WHERE h_fin.nombreestado IN ('Resuelto', 'Cerrado')
-      AND t.estado IN ('Resuelto', 'Cerrado')
+    JOIN LATERAL (
+      SELECT e.fechacambio
+      FROM estadosticket e
+      WHERE e.idticket = t.idticket AND e.nombreestado IN ('Resuelto', 'Cerrado')
+      ORDER BY e.fechacambio ASC, e.idestado ASC
+      LIMIT 1
+    ) h_fin ON TRUE
+    WHERE t.estado IN ('Resuelto', 'Cerrado')
     GROUP BY u.nombrecompleto
     ORDER BY tiempo_promedio_horas ASC
   `)
@@ -40,18 +50,11 @@ const obtenerMetricasCoordinador = async () => {
     FROM tickets t
     LEFT JOIN agentes a ON t.idagente = a.idagente
     LEFT JOIN usuarios u ON a.idusuario = u.idusuario
-    WHERE 
-      (t.estado NOT IN ('Resuelto', 'Cerrado', 'Cancelado') AND (
-        (t.prioridadsla = 'Alta' AND NOW() > t.fechacreacion + INTERVAL '4 hours') OR
-        (t.prioridadsla = 'Media' AND NOW() > t.fechacreacion + INTERVAL '24 hours') OR
-        (t.prioridadsla = 'Baja' AND NOW() > t.fechacreacion + INTERVAL '48 hours')
-      ))
-      OR 
-      (t.estado IN ('Resuelto', 'Cerrado') AND (
-        (t.prioridadsla = 'Alta' AND (SELECT MIN(e.fechacambio) FROM estadosticket e WHERE e.idticket = t.idticket AND e.nombreestado IN ('Resuelto', 'Cerrado')) > t.fechacreacion + INTERVAL '4 hours') OR
-        (t.prioridadsla = 'Media' AND (SELECT MIN(e.fechacambio) FROM estadosticket e WHERE e.idticket = t.idticket AND e.nombreestado IN ('Resuelto', 'Cerrado')) > t.fechacreacion + INTERVAL '24 hours') OR
-        (t.prioridadsla = 'Baja' AND (SELECT MIN(e.fechacambio) FROM estadosticket e WHERE e.idticket = t.idticket AND e.nombreestado IN ('Resuelto', 'Cerrado')) > t.fechacreacion + INTERVAL '48 hours')
-      ))
+    WHERE
+      (t.estado NOT IN ('Resuelto', 'Cerrado') AND NOW() > t.fechalimitesla)
+      OR
+      (t.estado IN ('Resuelto', 'Cerrado') AND
+        (SELECT MIN(e.fechacambio) FROM estadosticket e WHERE e.idticket = t.idticket AND e.nombreestado IN ('Resuelto', 'Cerrado')) > t.fechalimitesla)
     ORDER BY t.fechacreacion DESC
   `)
 
@@ -89,9 +92,14 @@ const obtenerMetricasAgente = async (idAgente) => {
   const tiempoResQuery = await pool.query(`
     SELECT AVG(EXTRACT(EPOCH FROM (h_fin.fechacambio - t.fechacreacion))/3600) as tiempo_promedio_horas
     FROM tickets t
-    JOIN estadosticket h_fin ON t.idticket = h_fin.idticket
-    WHERE h_fin.nombreestado IN ('Resuelto', 'Cerrado')
-      AND t.estado IN ('Resuelto', 'Cerrado')
+    JOIN LATERAL (
+      SELECT e.fechacambio
+      FROM estadosticket e
+      WHERE e.idticket = t.idticket AND e.nombreestado IN ('Resuelto', 'Cerrado')
+      ORDER BY e.fechacambio ASC, e.idestado ASC
+      LIMIT 1
+    ) h_fin ON TRUE
+    WHERE t.estado IN ('Resuelto', 'Cerrado')
       AND t.idagente = $1
   `, [idAgente])
 
@@ -112,17 +120,10 @@ const obtenerMetricasAgente = async (idAgente) => {
            (SELECT MIN(e.fechacambio) FROM estadosticket e WHERE e.idticket = t.idticket AND e.nombreestado IN ('Resuelto', 'Cerrado')) as fecharesolucion
     FROM tickets t
     WHERE t.idagente = $1 AND (
-      (t.estado NOT IN ('Resuelto', 'Cerrado', 'Cancelado') AND (
-        (t.prioridadsla = 'Alta' AND NOW() > t.fechacreacion + INTERVAL '4 hours') OR
-        (t.prioridadsla = 'Media' AND NOW() > t.fechacreacion + INTERVAL '24 hours') OR
-        (t.prioridadsla = 'Baja' AND NOW() > t.fechacreacion + INTERVAL '48 hours')
-      ))
-      OR 
-      (t.estado IN ('Resuelto', 'Cerrado') AND (
-        (t.prioridadsla = 'Alta' AND (SELECT MIN(e.fechacambio) FROM estadosticket e WHERE e.idticket = t.idticket AND e.nombreestado IN ('Resuelto', 'Cerrado')) > t.fechacreacion + INTERVAL '4 hours') OR
-        (t.prioridadsla = 'Media' AND (SELECT MIN(e.fechacambio) FROM estadosticket e WHERE e.idticket = t.idticket AND e.nombreestado IN ('Resuelto', 'Cerrado')) > t.fechacreacion + INTERVAL '24 hours') OR
-        (t.prioridadsla = 'Baja' AND (SELECT MIN(e.fechacambio) FROM estadosticket e WHERE e.idticket = t.idticket AND e.nombreestado IN ('Resuelto', 'Cerrado')) > t.fechacreacion + INTERVAL '48 hours')
-      ))
+      (t.estado NOT IN ('Resuelto', 'Cerrado') AND NOW() > t.fechalimitesla)
+      OR
+      (t.estado IN ('Resuelto', 'Cerrado') AND
+        (SELECT MIN(e.fechacambio) FROM estadosticket e WHERE e.idticket = t.idticket AND e.nombreestado IN ('Resuelto', 'Cerrado')) > t.fechalimitesla)
     )
     ORDER BY t.fechacreacion DESC
   `, [idAgente])
@@ -143,14 +144,58 @@ const obtenerMetricasAgente = async (idAgente) => {
 }
 
 const obtenerDatosReporteCsv = async () => {
+  const columnaFechaLimite = await pool.query(`
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = ANY(current_schemas(FALSE))
+        AND table_name = 'tickets'
+        AND column_name = 'fechalimitesla'
+    ) AS existe
+  `)
+
+  const fechaLimiteCalculada = `
+    CASE t.prioridadsla
+      WHEN 'Alta' THEN t.fechacreacion + INTERVAL '4 hours'
+      WHEN 'Media' THEN t.fechacreacion + INTERVAL '24 hours'
+      WHEN 'Baja' THEN t.fechacreacion + INTERVAL '48 hours'
+    END
+  `
+  const fechaLimiteSla = columnaFechaLimite.rows[0].existe
+    ? `COALESCE(t.fechalimitesla, ${fechaLimiteCalculada})`
+    : fechaLimiteCalculada
+
   const query = await pool.query(`
-    SELECT t.idticket, t.tipologiaitil, t.prioridadsla, t.estado, t.fechacreacion, 
+    SELECT t.idticket, t.tipologiaitil, t.prioridadsla, t.estado, t.fechacreacion,
+           resolucion.fecharesolucion, cierre.fechacierre,
+           resolucion.comentariotecnico AS solucion,
+           CASE
+             WHEN ${fechaLimiteSla} IS NULL THEN 'Pendiente'
+             WHEN COALESCE(resolucion.fecharesolucion, cierre.fechacierre) <= ${fechaLimiteSla} THEN 'Cumplió'
+             WHEN COALESCE(resolucion.fecharesolucion, cierre.fechacierre) IS NOT NULL
+               OR NOW() > ${fechaLimiteSla} THEN 'No cumplió'
+             ELSE 'Pendiente'
+           END AS estadosla,
            u_agente.nombrecompleto as agente, u_estudiante.nombrecompleto as estudiante
     FROM tickets t
     LEFT JOIN agentes a ON t.idagente = a.idagente
     LEFT JOIN usuarios u_agente ON a.idusuario = u_agente.idusuario
     LEFT JOIN estudiante e ON t.idestudiante = e.idestudiante
     LEFT JOIN usuarios u_estudiante ON e.idusuario = u_estudiante.idusuario
+    LEFT JOIN LATERAL (
+      SELECT h.fechacambio AS fecharesolucion, h.comentariotecnico
+      FROM estadosticket h
+      WHERE h.idticket = t.idticket AND h.nombreestado = 'Resuelto'
+      ORDER BY h.fechacambio ASC, h.idestado ASC
+      LIMIT 1
+    ) resolucion ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT h.fechacambio AS fechacierre
+      FROM estadosticket h
+      WHERE h.idticket = t.idticket AND h.nombreestado = 'Cerrado'
+      ORDER BY h.fechacambio ASC, h.idestado ASC
+      LIMIT 1
+    ) cierre ON TRUE
     ORDER BY t.fechacreacion DESC
   `)
   return query.rows

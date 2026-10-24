@@ -19,19 +19,32 @@ async function seed() {
             const hash = await bcrypt.hash('123456', 10);
 
             const query = await client.query(
-                `INSERT INTO Usuarios (NombreCompleto, CorreoInstitucional, PasswordHash, Rol)
-                    VALUES ($1, $2, $3, 'Estudiante')
-                    RETURNING IdUsuario`,
+                `INSERT INTO usuarios (nombrecompleto, correoinstitucional, passwordhash, rol)
+                     VALUES ($1, $2, $3, 'Estudiante')
+                     ON CONFLICT (correoinstitucional) DO UPDATE SET
+                       nombrecompleto = EXCLUDED.nombrecompleto,
+                       passwordhash = EXCLUDED.passwordhash,
+                       rol = EXCLUDED.rol
+                     RETURNING idusuario`,
                 [estudiante.nombre, estudiante.correo, hash]
             );
 
-            const idUsuario = query.rows[0].IdUsuario;
+            const idUsuario = query.rows[0].idusuario;
 
-            await client.query(
-                `INSERT INTO Estudiante (Carne, Carrera, SaldoActual, IdUsuario)
-                    VALUES ($1, $2, $3, $4)`,
+            const update = await client.query(
+                `UPDATE estudiante
+                 SET carne = $1, carrera = $2, saldoactual = $3
+                 WHERE idusuario = $4`,
                 [estudiante.carne, estudiante.carrera, estudiante.saldo, idUsuario]
             );
+
+            if (update.rowCount === 0) {
+                await client.query(
+                    `INSERT INTO estudiante (carne, carrera, saldoactual, idusuario)
+                     VALUES ($1, $2, $3, $4)`,
+                    [estudiante.carne, estudiante.carrera, estudiante.saldo, idUsuario]
+                );
+            }
 
             console.log(`${estudiante.nombre} creado — ${estudiante.correo} / 123456`);
         }
@@ -46,8 +59,10 @@ async function seed() {
     } finally {
         client.release();
         await pool.end();
-        process.exit();
     }
 };
 
-seed().catch(console.error);
+seed().catch(err => {
+    console.error(err);
+    process.exitCode = 1;
+});

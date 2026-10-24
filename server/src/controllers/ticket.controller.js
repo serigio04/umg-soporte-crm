@@ -21,6 +21,10 @@ const crearTicket = async (req, res) => {
       carnet = est.rows[0].carne
     } else if (!carnetEstudiante) {
       return res.status(400).json({ message: 'Se requiere carnet del estudiante' })
+    } else if (!/^9989-\d{2}-\d{5}$/.test(carnetEstudiante.trim())) {
+      return res.status(400).json({ message: 'El carné debe usar el formato 9989-XX-XXXXX' })
+    } else {
+      carnet = carnetEstudiante.trim().replace(/-/g, '')
     }
 
     const ticket = await ticketService.crearTicket({
@@ -34,6 +38,10 @@ const crearTicket = async (req, res) => {
   } catch (err) {
     if (err.message === 'ESTUDIANTE_NO_ENCONTRADO')
       return res.status(404).json({ message: 'Estudiante no encontrado' })
+    if (err.message === 'AGENTE_NO_ENCONTRADO')
+      return res.status(404).json({ message: 'Agente no encontrado' })
+    if (err.message === 'Tipología inválida')
+      return res.status(400).json({ message: 'Tipología inválida' })
     console.error('Error creando ticket:', err)
     res.status(500).json({ message: 'Error interno del servidor' })
   }
@@ -69,7 +77,11 @@ const obtenerDetalle = async (req, res) => {
     if (!Number.isInteger(idTicketInt) || Number.isNaN(idTicketInt)) {
       return res.status(400).json({ message: 'ID de ticket inválido' });
     }
-    const ticket = await ticketService.obtenerDetalleTicket(idTicketInt);
+    const ticket = await ticketService.obtenerDetalleTicket(
+      idTicketInt,
+      req.usuario.idUsuario,
+      req.usuario.rol
+    );
     res.status(200).json(ticket);
   } catch (err) {
     if (err.message === 'TICKET_NO_ENCONTRADO')
@@ -93,23 +105,21 @@ const cambiarEstado = async (req, res) => {
     if (!Number.isInteger(idTicketInt) || Number.isNaN(idTicketInt))
       return res.status(400).json({ message: 'ID de ticket inválido' })
 
-    const ticket = await pool.query(
-      `SELECT idestudiante FROM tickets WHERE idticket = $1`,
-      [idTicketInt]
-    )
-    if (ticket.rows.length === 0)
-      return res.status(404).json({ message: 'Ticket no encontrado' })
-
     const resultado = await ticketService.cambiarEstadoTicket(
       idTicketInt,
       nuevoEstado,
       comentario || '',
-      ticket.rows[0].idestudiante
+      req.usuario.idUsuario,
+      req.usuario.rol
     )
     res.json(resultado)
   } catch (err) {
     if (err.message === 'ESTADO_INVALIDO')
       return res.status(400).json({ message: 'Estado inválido' })
+    if (err.message === 'TRANSICION_ESTADO_INVALIDA')
+      return res.status(409).json({ message: 'Transición de estado no permitida' })
+    if (err.message === 'TICKET_NO_ENCONTRADO')
+      return res.status(404).json({ message: 'Ticket no encontrado' })
     console.error('Error:', err)
     res.status(500).json({ message: 'Error interno' })
   }
@@ -137,9 +147,15 @@ const escalar = async (req, res) => {
   const { idTicket } = req.params
 
   try {
-    const resultado = await ticketService.escalarTicket(idTicket)
+    const resultado = await ticketService.escalarTicket(idTicket, req.usuario.idUsuario)
     res.json(resultado)
   } catch (err) {
+    if (err.message === 'ID_TICKET_INVALIDO')
+      return res.status(400).json({ message: 'ID de ticket inválido' })
+    if (err.message === 'TICKET_NO_ENCONTRADO')
+      return res.status(404).json({ message: 'Ticket no encontrado' })
+    if (err.message === 'TRANSICION_ESTADO_INVALIDA')
+      return res.status(409).json({ message: 'El ticket ya no puede escalarse' })
     if (err.message === 'COORDINADOR_NO_ENCONTRADO')
       return res.status(404).json({ message: 'No se encontró un coordinador activo' })
     console.error('Error escalando ticket:', err)
@@ -173,6 +189,60 @@ const obtenerTicketsAbiertos = async (req, res) => {
   }
 }
 
+const actualizarPrioridad = async (req, res) => {
+  try {
+    const resultado = await ticketService.actualizarPrioridad(
+      req.params.idTicket,
+      req.body.prioridadSLA,
+      req.usuario.idUsuario,
+      req.usuario.rol
+    )
+    res.json(resultado)
+  } catch (err) {
+    responderErrorWorkflow(err, res)
+  }
+}
+
+const obtenerCandidatos = async (req, res) => {
+  try {
+    const candidatos = await ticketService.obtenerCandidatos(
+      req.params.idTicket,
+      req.usuario.idUsuario,
+      req.usuario.rol
+    )
+    res.json(candidatos)
+  } catch (err) {
+    responderErrorWorkflow(err, res)
+  }
+}
+
+const reasignar = async (req, res) => {
+  try {
+    const resultado = await ticketService.reasignar(
+      req.params.idTicket,
+      req.body.idAgente,
+      req.usuario.idUsuario,
+      req.usuario.rol
+    )
+    res.json(resultado)
+  } catch (err) {
+    responderErrorWorkflow(err, res)
+  }
+}
+
+const responderErrorWorkflow = (err, res) => {
+  if (['ID_TICKET_INVALIDO', 'ID_AGENTE_INVALIDO', 'PRIORIDAD_INVALIDA'].includes(err.message))
+    return res.status(400).json({ message: 'Datos inválidos' })
+  if (err.message === 'TICKET_NO_ENCONTRADO')
+    return res.status(404).json({ message: 'Ticket no encontrado' })
+  if (['TICKET_CERRADO', 'TICKET_FINALIZADO'].includes(err.message))
+    return res.status(409).json({ message: 'El ticket resuelto o cerrado ya no admite este cambio' })
+  if (err.message === 'AGENTE_INCOMPATIBLE')
+    return res.status(422).json({ message: 'El agente no es compatible con la tipología del ticket' })
+  console.error('Error en flujo de ticket:', err)
+  return res.status(500).json({ message: 'Error interno' })
+}
+
 module.exports = { 
   crearTicket, 
   obtenerMisTickets, 
@@ -182,5 +252,8 @@ module.exports = {
   obtenerHistorialAgente, 
   escalar, 
   aceptarResolucion, 
-  obtenerTicketsAbiertos
+  obtenerTicketsAbiertos,
+  actualizarPrioridad,
+  obtenerCandidatos,
+  reasignar
 };

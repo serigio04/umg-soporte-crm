@@ -17,19 +17,32 @@ async function seed() {
       const hash = await bcrypt.hash('123456', 10)
 
       const query = await client.query(
-        `INSERT INTO Usuarios (NombreCompleto, CorreoInstitucional, PasswordHash, Rol)
+        `INSERT INTO usuarios (nombrecompleto, correoinstitucional, passwordhash, rol)
          VALUES ($1, $2, $3, 'Agente')
-         RETURNING IdUsuario`,
+         ON CONFLICT (correoinstitucional) DO UPDATE SET
+           nombrecompleto = EXCLUDED.nombrecompleto,
+           passwordhash = EXCLUDED.passwordhash,
+           rol = EXCLUDED.rol
+         RETURNING idusuario`,
         [ agente.nombre, agente.correo, hash ]
       )
 
-      const idUsuario = query.rows[0].IdUsuario
+      const idUsuario = query.rows[0].idusuario
 
-      await client.query(
-        `INSERT INTO Agentes (Especialidad, NivelAcceso, SedeAsignada, IdUsuario)
-          VALUES ($1, $2, $3, $4)`,
+      const update = await client.query(
+        `UPDATE agentes
+         SET especialidad = $1, nivelacceso = $2, sedeasignada = $3
+         WHERE idusuario = $4`,
         [ agente.especialidad, agente.nivel, agente.sede, idUsuario ]
       )
+
+      if (update.rowCount === 0) {
+        await client.query(
+          `INSERT INTO agentes (especialidad, nivelacceso, sedeasignada, idusuario)
+           VALUES ($1, $2, $3, $4)`,
+          [ agente.especialidad, agente.nivel, agente.sede, idUsuario ]
+        )
+      }
 
       console.log(`${agente.nombre} creado — ${agente.correo} / 123456`)
     }
@@ -44,8 +57,10 @@ async function seed() {
   } finally {
     client.release()
     await pool.end()
-    process.exit()
   }
 }
 
-seed().catch(console.error)
+seed().catch(err => {
+  console.error(err)
+  process.exitCode = 1
+})

@@ -27,8 +27,10 @@ export default function RutaProtegida({ rolesPermitidos }) {
     // Redirigir según su rol correspondiente para evitar bucles o bloqueos
     if (usuario.rol === 'Estudiante') {
       return <Navigate to="/estudiante/dashboard" replace />;
-    } else if (usuario.rol === 'Agente' || usuario.rol === 'Coordinador') {
+    } else if (usuario.rol === 'Agente') {
       return <Navigate to="/agente/dashboard" replace />;
+    } else if (usuario.rol === 'Coordinador') {
+      return <Navigate to="/coordinador/dashboard" replace />;
     } else {
       return <Navigate to="/login" replace />;
     }

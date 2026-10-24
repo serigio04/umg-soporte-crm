@@ -10,19 +10,32 @@ async function seed() {
     const hash = await bcrypt.hash('123456', 10)
 
     const userRes = await client.query(
-      `INSERT INTO Usuarios (NombreCompleto, CorreoInstitucional, PasswordHash, Rol)
+      `INSERT INTO usuarios (nombrecompleto, correoinstitucional, passwordhash, rol)
        VALUES ($1, $2, $3, 'Coordinador')
-       RETURNING IdUsuario`,
+       ON CONFLICT (correoinstitucional) DO UPDATE SET
+         nombrecompleto = EXCLUDED.nombrecompleto,
+         passwordhash = EXCLUDED.passwordhash,
+         rol = EXCLUDED.rol
+       RETURNING idusuario`,
       ['Coordinador UMG', 'coordinador@miumg.edu.gt', hash]
     )
 
-    const idUsuario = userRes.rows[0].IdUsuario
+    const idUsuario = userRes.rows[0].idusuario
 
-    await client.query(
-      `INSERT INTO Agentes (Especialidad, NivelAcceso, SedeAsignada, IdUsuario)
-       VALUES ($1, $2, $3, $4)`,
+    const update = await client.query(
+      `UPDATE agentes
+       SET especialidad = $1, nivelacceso = $2, sedeasignada = $3
+       WHERE idusuario = $4`,
       ['General', 3, 'Campus Central', idUsuario]
     )
+
+    if (update.rowCount === 0) {
+      await client.query(
+        `INSERT INTO agentes (especialidad, nivelacceso, sedeasignada, idusuario)
+         VALUES ($1, $2, $3, $4)`,
+        ['General', 3, 'Campus Central', idUsuario]
+      )
+    }
 
     await client.query('COMMIT')
     console.log('Coordinador creado — coordinador@miumg.edu.gt / 123456')
@@ -33,8 +46,10 @@ async function seed() {
   } finally {
     client.release()
     await pool.end()
-    process.exit()
   }
 }
 
-seed().catch(console.error)
+seed().catch(err => {
+  console.error(err)
+  process.exitCode = 1
+})

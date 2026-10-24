@@ -1,5 +1,8 @@
 const metricsService = require('../services/metrics.service')
 
+const formatearFechaReporte = fecha => fecha ? new Date(fecha).toLocaleString('es-GT') : ''
+const escaparCsv = campo => `"${String(campo ?? '').replace(/"/g, '""')}"`
+
 const obtenerDashboardCoordinador = async (req, res) => {
   try {
     const metricas = await metricsService.obtenerMetricasCoordinador()
@@ -21,6 +24,16 @@ const obtenerMetricasAgente = async (req, res) => {
   }
 }
 
+const obtenerTickets = async (req, res) => {
+  try {
+    const tickets = await metricsService.obtenerDatosReporteCsv()
+    res.json(tickets)
+  } catch (err) {
+    console.error('Error obteniendo tickets para coordinación:', err)
+    res.status(500).json({ message: 'Error interno del servidor' })
+  }
+}
+
 const descargarReporteCsv = async (req, res) => {
   try {
     const datos = await metricsService.obtenerDatosReporteCsv()
@@ -29,23 +42,29 @@ const descargarReporteCsv = async (req, res) => {
       return res.status(404).json({ message: 'No hay datos para exportar' })
     }
 
-    // Convertir a CSV simple
-    const encabezados = ['ID Ticket', 'Tipologia', 'Prioridad', 'Estado', 'Fecha Creacion', 'Agente', 'Estudiante']
+    const encabezados = [
+      'ID Ticket', 'Tipología', 'Prioridad', 'Estado', 'Fecha Creación',
+      'Fecha Resolución', 'Fecha Cierre', 'Solución', 'Estado SLA', 'Agente', 'Estudiante'
+    ]
     const filasCsv = datos.map(t => {
       return [
         t.idticket,
         t.tipologiaitil,
         t.prioridadsla,
         t.estado,
-        new Date(t.fechacreacion).toLocaleString('es-GT'),
+        formatearFechaReporte(t.fechacreacion),
+        formatearFechaReporte(t.fecharesolucion),
+        formatearFechaReporte(t.fechacierre),
+        t.solucion,
+        t.estadosla,
         t.agente || 'Sin Asignar',
         t.estudiante || 'Desconocido'
-      ].map(campo => `"${String(campo).replace(/"/g, '""')}"`).join(',')
+      ].map(escaparCsv).join(',')
     })
 
-    const csvContent = [encabezados.join(','), ...filasCsv].join('\n')
+    const csvContent = [encabezados.map(escaparCsv).join(','), ...filasCsv].join('\r\n')
 
-    res.header('Content-Type', 'text/csv')
+    res.header('Content-Type', 'text/csv; charset=utf-8')
     res.attachment('reporte_tickets.csv')
     res.send(csvContent)
   } catch (err) {
@@ -71,7 +90,11 @@ const descargarReporteExcel = async (req, res) => {
       { header: 'Tipología', key: 'tipologia', width: 25 },
       { header: 'Prioridad', key: 'prioridad', width: 15 },
       { header: 'Estado', key: 'estado', width: 15 },
-      { header: 'Fecha Creación', key: 'fecha', width: 20 },
+      { header: 'Fecha Creación', key: 'fechaCreacion', width: 20 },
+      { header: 'Fecha Resolución', key: 'fechaResolucion', width: 20 },
+      { header: 'Fecha Cierre', key: 'fechaCierre', width: 20 },
+      { header: 'Solución', key: 'solucion', width: 50 },
+      { header: 'Estado SLA', key: 'estadoSla', width: 15 },
       { header: 'Agente', key: 'agente', width: 30 },
       { header: 'Estudiante', key: 'estudiante', width: 30 }
     ];
@@ -82,7 +105,11 @@ const descargarReporteExcel = async (req, res) => {
         tipologia: t.tipologiaitil,
         prioridad: t.prioridadsla,
         estado: t.estado,
-        fecha: new Date(t.fechacreacion).toLocaleString('es-GT'),
+        fechaCreacion: formatearFechaReporte(t.fechacreacion),
+        fechaResolucion: formatearFechaReporte(t.fecharesolucion),
+        fechaCierre: formatearFechaReporte(t.fechacierre),
+        solucion: t.solucion || '',
+        estadoSla: t.estadosla,
         agente: t.agente || 'Sin Asignar',
         estudiante: t.estudiante || 'Desconocido'
       });
@@ -136,4 +163,4 @@ const descargarReporteCalificacionesExcel = async (req, res) => {
   }
 }
 
-module.exports = { obtenerDashboardCoordinador, obtenerMetricasAgente, descargarReporteCsv, descargarReporteExcel, descargarReporteCalificacionesExcel }
+module.exports = { obtenerDashboardCoordinador, obtenerMetricasAgente, obtenerTickets, descargarReporteCsv, descargarReporteExcel, descargarReporteCalificacionesExcel }
