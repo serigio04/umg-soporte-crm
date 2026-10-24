@@ -1,9 +1,9 @@
 const express = require('express')
 const router = express.Router()
 const surveyController = require('../controllers/survey.controller')
-const { verificarToken } = require('../middlewares/auth.middleware')
+const { verificarToken, soloRol } = require('../middlewares/auth.middleware')
 
-router.post('/:idEncuesta/responder', verificarToken, surveyController.enviarEncuesta)
-router.get('/ticket/:idTicket', verificarToken, surveyController.obtenerEncuestaPorTicket)
+router.post('/:idEncuesta/responder', verificarToken, soloRol('Estudiante'), surveyController.enviarEncuesta)
+router.get('/ticket/:idTicket', verificarToken, soloRol('Estudiante'), surveyController.obtenerEncuestaPorTicket)
 
 module.exports = router

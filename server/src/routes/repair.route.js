@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const repairController = require('../controllers/repair.controller');
+const { verificarToken, soloRol } = require('../middlewares/auth.middleware');
 
-// Ruta de reparación (sin autenticación, solo para mantenimiento)
-router.get('/repair-all', repairController.repairAll);
+router.get('/repair-all', verificarToken, soloRol('Coordinador'), repairController.repairAll);
 
 module.exports = router;

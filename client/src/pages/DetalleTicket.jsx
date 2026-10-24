@@ -1,254 +1,378 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
+import FeedbackMessage from '../components/atoms/FeedbackMessage'
+import TicketChat from '../components/organisms/TicketChat'
 import api from '../services/api'
 
+const TRANSICIONES = {
+  Abierto: ['EnProceso'],
+  EnProceso: ['Pendiente'],
+  Pendiente: ['Resuelto'],
+  Resuelto: [],
+  Cerrado: [],
+}
+
+const PRIORIDADES = ['Alta', 'Media', 'Baja']
+
 const COLOR_ESTADO = {
-  'Abierto': '#e74c3c',
-  'EnProceso': '#e67e22',
-  'Pendiente': '#f1c40f',
-  'Resuelto': '#1abc9c',
-  'Cerrado': '#3498db'
+  Abierto: '#dc2626',
+  EnProceso: '#d97706',
+  Pendiente: '#a16207',
+  Resuelto: '#0f766e',
+  Cerrado: '#2563eb',
 }
 
 const COLOR_PRIORIDAD = {
-  'Alta':  '#e74c3c',
-  'Media': '#e67e22',
-  'Baja':  '#27ae60'
+  Alta: '#dc2626',
+  Media: '#d97706',
+  Baja: '#15803d',
+}
+
+function leerUsuario() {
+  try {
+    const valor = localStorage.getItem('usuario')
+    return valor ? JSON.parse(valor) : null
+  } catch {
+    return null
+  }
 }
 
 export default function DetalleTicket() {
-  const { idTicket } = useParams();
-  const [ticket, setTicket] = useState(null);
-  const [nuevoEstado, setNuevoEstado] = useState('');
-  const [comentario, setComentario] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [enviando, setEnviando] = useState(false);
-  const navigate = useNavigate();
+  const { idTicket } = useParams()
+  const navigate = useNavigate()
+  const usuario = leerUsuario()
+  const [ticket, setTicket] = useState(null)
+  const [candidatos, setCandidatos] = useState([])
+  const [nuevoEstado, setNuevoEstado] = useState('')
+  const [comentario, setComentario] = useState('')
+  const [prioridad, setPrioridad] = useState('')
+  const [idAgente, setIdAgente] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [accion, setAccion] = useState('')
+  const [error, setError] = useState('')
+  const [exito, setExito] = useState('')
 
-  // Obtener usuario activo
-  const usuarioTexto = localStorage.getItem('usuario')
-  const usuario = usuarioTexto ? JSON.parse(usuarioTexto) : null
+  const esEquipoSoporte = usuario?.rol === 'Agente' || usuario?.rol === 'Coordinador'
+  const puedeEditar = ticket && !['Resuelto', 'Cerrado'].includes(ticket.estado) && esEquipoSoporte
+  const esEstudiante = usuario?.rol === 'Estudiante'
 
-  const puedeEditar = ticket && ticket.estado !== 'Cerrado' && (usuario?.rol === 'Agente' || usuario?.rol === 'Coordinador');
-  const esEstudiante = usuario?.rol === 'Estudiante';
+  async function cargarTicket(mostrarCarga = false) {
+    if (mostrarCarga) setLoading(true)
+    try {
+      const { data } = await api.get(`/tickets/${idTicket}`)
+      setTicket(data)
+      setNuevoEstado(data.estado)
+      setPrioridad(data.prioridadSLA)
+      setIdAgente(String(data.idAgente ?? ''))
+
+      if (data.estado !== 'Cerrado' && esEquipoSoporte) {
+        try {
+          const respuesta = await api.get(`/tickets/${idTicket}/candidatos`)
+          setCandidatos(respuesta.data)
+        } catch (err) {
+          setError(err.response?.data?.message || 'No se pudieron cargar los agentes compatibles')
+        }
+      } else {
+        setCandidatos([])
+      }
+      return data
+    } catch (err) {
+      if (mostrarCarga) setTicket(null)
+      else setError(err.response?.data?.message || 'No se pudo actualizar el ticket')
+      return null
+    } finally {
+      if (mostrarCarga) setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    api.get(`/tickets/${idTicket}`)
-      .then(r => {
-        setTicket(r.data)
-        setNuevoEstado(r.data.estado)
-      })
-      .catch(() => setTicket(null))
-      .finally(() => setLoading(false))
-  }, [idTicket])
+    let activo = true
 
-  async function handleCambiarEstado(e) {
-    e.preventDefault()
+    api.get(`/tickets/${idTicket}`)
+      .then(({ data }) => {
+        if (!activo) return
+        setTicket(data)
+        setNuevoEstado(data.estado)
+        setPrioridad(data.prioridadSLA)
+        setIdAgente(String(data.idAgente ?? ''))
+        if (data.estado !== 'Cerrado' && esEquipoSoporte) {
+          api.get(`/tickets/${idTicket}/candidatos`)
+            .then(respuesta => {
+              if (activo) setCandidatos(respuesta.data)
+            })
+            .catch(err => {
+              if (activo) setError(err.response?.data?.message || 'No se pudieron cargar los agentes compatibles')
+            })
+        }
+      })
+      .catch(() => {
+        if (activo) setTicket(null)
+      })
+      .finally(() => {
+        if (activo) setLoading(false)
+      })
+
+    return () => { activo = false }
+  }, [idTicket, esEquipoSoporte])
+
+  async function handleCambiarEstado(event) {
+    event.preventDefault()
     if (nuevoEstado === ticket.estado) return
-    
-    setEnviando(true)
+    setError('')
+    setExito('')
+    setAccion('estado')
     try {
       await api.put(`/tickets/${idTicket}/estado`, { nuevoEstado, comentario })
-      navigate(-1)
+      await cargarTicket()
+      setComentario('')
+      setExito('Estado actualizado correctamente.')
     } catch (err) {
-      alert(err.response?.data?.message || 'Error al cambiar estado')
+      setError(err.response?.data?.message || 'Error al cambiar estado')
     } finally {
-      setEnviando(false)
+      setAccion('')
+    }
+  }
+
+  async function handleCambiarPrioridad(event) {
+    event.preventDefault()
+    if (prioridad === ticket.prioridadSLA) return
+    setError('')
+    setExito('')
+    setAccion('prioridad')
+    try {
+      await api.put(`/tickets/${idTicket}/prioridad`, { prioridadSLA: prioridad })
+      await cargarTicket()
+      setExito('Prioridad y plazo SLA actualizados.')
+    } catch (err) {
+      setError(err.response?.data?.message || 'Error al cambiar la prioridad')
+    } finally {
+      setAccion('')
+    }
+  }
+
+  async function handleReasignar(event) {
+    event.preventDefault()
+    const nuevoIdAgente = Number(idAgente)
+    if (!nuevoIdAgente || nuevoIdAgente === Number(ticket.idAgente)) return
+    setError('')
+    setExito('')
+    setAccion('asignacion')
+    try {
+      await api.put(`/tickets/${idTicket}/asignacion`, { idAgente: nuevoIdAgente })
+      if (usuario?.rol === 'Agente') {
+        navigate(-1)
+        return
+      }
+      await cargarTicket()
+      setExito('Ticket reasignado correctamente.')
+    } catch (err) {
+      setError(err.response?.data?.message || 'Error al reasignar el ticket')
+    } finally {
+      setAccion('')
     }
   }
 
   async function handleAceptarResolucion() {
-    setEnviando(true)
+    setError('')
+    setAccion('aceptar')
     try {
       await api.put(`/tickets/${idTicket}/aceptar`)
-      navigate(-1)
+      navigate(`/encuesta/ticket/${idTicket}`, { replace: true })
     } catch (err) {
-      alert(err.response?.data?.message || 'Error al cerrar el ticket')
-    } finally {
-      setEnviando(false)
+      setError(err.response?.data?.message || 'Error al cerrar el ticket')
+      setAccion('')
     }
   }
 
   async function handleEscalar() {
-    if (!window.confirm("¿Estás seguro de escalar este ticket al coordinador?")) return;
-    setEnviando(true)
+    if (!window.confirm('¿Estás seguro de escalar este ticket al coordinador?')) return
+    setError('')
+    setAccion('escalar')
     try {
       await api.put(`/tickets/${idTicket}/escalar`)
-      alert('Ticket escalado exitosamente')
       navigate(-1)
     } catch (err) {
-      alert(err.response?.data?.message || 'Error al escalar ticket')
-    } finally {
-      setEnviando(false)
+      setError(err.response?.data?.message || 'Error al escalar ticket')
+      setAccion('')
     }
   }
 
-  if (loading) return <p style={{ padding: '2rem', textAlign: 'center' }}>Cargando...</p>
-  if (!ticket) return <p style={{ padding: '2rem', textAlign: 'center' }}>Ticket no encontrado</p>
+  if (loading) return <p className="ticket-page-status">Cargando ticket...</p>
+  if (!ticket) return <p className="ticket-page-status">Ticket no encontrado o sin acceso.</p>
+
+  const agenteActual = candidatos.find(candidato => Number(candidato.idAgente) === Number(ticket.idAgente))
+  const nombreAgente = ticket.nombreAgente || agenteActual?.nombreCompleto || 'Sin asignar'
+  const fechaLimite = ticket.fechaLimiteSLA ? new Date(ticket.fechaLimiteSLA).toLocaleString('es-GT') : 'No disponible'
 
   return (
-    <div style={styles.page}>
-      <div style={styles.header}>
-        <button style={styles.backBtn} onClick={() => navigate(-1)}>← Volver</button>
-        <span style={styles.title}>Ticket #{ticket.idTicket}</span>
-        <span />
-      </div>
+    <div className="crm-page ticket-detail-page">
+      <header className="crm-header ticket-detail-header">
+        <button className="ticket-back-button" onClick={() => navigate(-1)}>Volver</button>
+        <div>
+          <span className="ticket-header-eyebrow">Mesa de soporte</span>
+          <strong>Ticket #{ticket.idTicket}</strong>
+        </div>
+        <span className="ticket-status-badge" style={{ background: COLOR_ESTADO[ticket.estado] }}>
+          {ticket.estado === 'EnProceso' ? 'En proceso' : ticket.estado}
+        </span>
+      </header>
 
-      <div style={styles.container}>
-        <div style={styles.card}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={styles.cardTitle}>Detalles del ticket</h3>
+      <main id="contenido-principal" className="ticket-detail-layout">
+        <div className="ticket-detail-notices">
+          <FeedbackMessage>{error}</FeedbackMessage>
+          <FeedbackMessage type="success">{exito}</FeedbackMessage>
+        </div>
+
+        <section className="ticket-panel ticket-summary" aria-labelledby="detalle-title">
+          <div className="ticket-panel-heading">
+            <div>
+              <p className="ticket-panel-kicker">Solicitud #{ticket.idTicket}</p>
+              <h1 id="detalle-title">{ticket.tipologiaITIL}</h1>
+            </div>
             {usuario?.rol === 'Agente' && ticket.estado !== 'Cerrado' && ticket.estado !== 'Resuelto' && (
-              <button style={styles.escalarBtn} onClick={handleEscalar} disabled={enviando}>
-                 ⚠️ Escalar al Coordinador
+              <button className="ticket-warning-button" onClick={handleEscalar} disabled={Boolean(accion)}>
+                {accion === 'escalar' ? 'Escalando...' : 'Escalar al coordinador'}
               </button>
             )}
           </div>
-          
-          <InfoRow label="Estudiante" value={ticket.nombreEstudiante || 'Desconocido'} />
-          <InfoRow label="Carné" value={ticket.carneEstudiante || 'Desconocido'} />
-          <InfoRow label="Tipología" value={ticket.tipologiaITIL} />
-          <div style={styles.row}>
-            <span style={styles.label}>Descripción</span>
-            <span style={{ fontSize: '13px', color: '#1a1a2e', maxWidth: '70%', textAlign: 'right' }}>{ticket.descripcion}</span>
-          </div>
-          <InfoRow label="Fecha creación" value={new Date(ticket.fechaCreacion).toLocaleString('es-GT')} />
-          <div style={styles.row}>
-            <span style={styles.label}>Prioridad</span>
-            <span style={{ ...styles.badgeBanner, background: COLOR_PRIORIDAD[ticket.prioridadSLA] }}>
-               {ticket.prioridadSLA}
+
+          <p className="ticket-description">{ticket.descripcion}</p>
+          <dl className="ticket-facts">
+            <InfoItem label="Estudiante" value={ticket.nombreEstudiante || 'Desconocido'} />
+            <InfoItem label="Carné" value={ticket.carneEstudiante || 'Desconocido'} />
+            <InfoItem label="Agente actual" value={nombreAgente} />
+            <InfoItem label="Creado" value={new Date(ticket.fechaCreacion).toLocaleString('es-GT')} />
+            <InfoItem label="Límite SLA" value={fechaLimite} />
+            <InfoItem
+              label="Tiempo SLA"
+              value={ticket.vencido ? 'Vencido' : `${ticket.horasRestantes} horas restantes`}
+              emphasis={ticket.vencido ? 'danger' : 'success'}
+            />
+          </dl>
+          <div className="ticket-badge-row">
+            <span className="ticket-priority-badge" style={{ background: COLOR_PRIORIDAD[ticket.prioridadSLA] }}>
+              Prioridad {ticket.prioridadSLA}
             </span>
           </div>
-          <div style={styles.row}>
-            <span style={styles.label}>Estado actual</span>
-            <span style={{ ...styles.badge, background: COLOR_ESTADO[ticket.estado] }}>
-              {ticket.estado}
-            </span>
-          </div>
-          <div style={styles.row}>
-            <span style={styles.label}>Horas restantes</span>
-            <span style={{ fontSize: '13px', fontWeight: '500', color: ticket.vencido ? '#c0392b' : '#27ae60' }}>
-              {ticket.vencido ? '⚠️ Vencido' : `${ticket.horasRestantes}h`}
-            </span>
-          </div>
-        </div>
+        </section>
 
         {puedeEditar && (
-          <div style={styles.card}>
-            <h3 style={styles.cardTitle}>Cambiar estado</h3>
-            <form onSubmit={handleCambiarEstado}>
-              <div style={styles.field}>
-                <label style={styles.label}>Nuevo estado</label>
-                <select
-                  style={styles.select}
-                  value={nuevoEstado}
-                  onChange={e => setNuevoEstado(e.target.value)}
-                >
-                  <option value="Abierto">Abierto</option>
-                  <option value="EnProceso">En Proceso</option>
-                  <option value="Pendiente">Pendiente</option>
-                  <option value="Resuelto">Resuelto</option>
-                  <option value="Cerrado">Cerrado (Cancelado)</option>
-                </select>
+          <section className="ticket-panel ticket-workflow" aria-labelledby="workflow-title">
+            <div className="ticket-panel-heading">
+              <div>
+                <p className="ticket-panel-kicker">Gestión</p>
+                <h2 id="workflow-title">Flujo del ticket</h2>
               </div>
-              <div style={styles.field}>
-                <label style={styles.label}>Comentario (opcional)</label>
+            </div>
+
+            <div className="ticket-workflow-grid">
+              <form onSubmit={handleCambiarPrioridad}>
+                <label htmlFor="ticket-priority">Prioridad y SLA</label>
+                <select id="ticket-priority" value={prioridad} onChange={event => setPrioridad(event.target.value)}>
+                  {PRIORIDADES.map(item => <option key={item} value={item}>{item}</option>)}
+                </select>
+                <button type="submit" disabled={Boolean(accion) || prioridad === ticket.prioridadSLA}>
+                  {accion === 'prioridad' ? 'Actualizando...' : 'Actualizar prioridad'}
+                </button>
+              </form>
+
+              <form onSubmit={handleReasignar}>
+                <label htmlFor="ticket-agent">Agente compatible</label>
+                <select id="ticket-agent" value={idAgente} onChange={event => setIdAgente(event.target.value)}>
+                  {candidatos.length === 0 && <option value="">Sin agentes compatibles</option>}
+                  {candidatos.map(candidato => (
+                    <option key={candidato.idAgente} value={candidato.idAgente}>
+                      {candidato.nombreCompleto} · {candidato.sedeAsignada}
+                    </option>
+                  ))}
+                </select>
+                <button type="submit" disabled={Boolean(accion) || !idAgente || Number(idAgente) === Number(ticket.idAgente)}>
+                  {accion === 'asignacion' ? 'Reasignando...' : 'Reasignar ticket'}
+                </button>
+              </form>
+
+              <form className="ticket-state-form" onSubmit={handleCambiarEstado}>
+                <label htmlFor="nuevo-estado">Nuevo estado</label>
+                <select id="nuevo-estado" value={nuevoEstado} onChange={event => setNuevoEstado(event.target.value)}>
+                  <option value={ticket.estado}>
+                    {ticket.estado === 'EnProceso' ? 'En proceso (actual)' : `${ticket.estado} (actual)`}
+                  </option>
+                  {TRANSICIONES[ticket.estado].map(estado => (
+                    <option key={estado} value={estado}>{estado === 'EnProceso' ? 'En proceso' : estado}</option>
+                  ))}
+                </select>
+                <label htmlFor="comentario-tecnico">Comentario técnico (opcional)</label>
                 <textarea
-                  style={styles.textarea}
+                  id="comentario-tecnico"
                   rows={3}
                   value={comentario}
-                  onChange={e => setComentario(e.target.value)}
-                  placeholder="Comentario técnico..."
+                  onChange={event => setComentario(event.target.value)}
+                  placeholder="Añade contexto para el historial"
                 />
-              </div>
-              <button 
-                  type="submit" 
-                  style={{ 
-                      ...styles.btn, 
-                      opacity: enviando ? 0.7 : 1,
-                      background: '#1a1a2e',
-                      cursor: 'pointer'
-                  }} 
-                  disabled={enviando}
-                  >
-                  {enviando ? 'Guardando...' : 'Guardar cambios'}
-              </button>
-            </form>
-          </div>
+                <button type="submit" disabled={Boolean(accion) || nuevoEstado === ticket.estado}>
+                  {accion === 'estado' ? 'Guardando...' : 'Guardar estado'}
+                </button>
+              </form>
+            </div>
+          </section>
         )}
+
+        <TicketChat
+          idTicket={ticket.idTicket}
+          cerrado={ticket.estado === 'Cerrado'}
+          usuario={usuario}
+          onTicketUpdated={() => cargarTicket()}
+        />
 
         {esEstudiante && ticket.estado === 'Resuelto' && (
-           <div style={styles.card}>
-             <h3 style={styles.cardTitle}>Aceptar Resolución</h3>
-             <div style={{ background: '#f8f9fa', padding: '12px', borderRadius: '8px', marginBottom: '1rem', borderLeft: '4px solid #1abc9c' }}>
-               <strong style={{ fontSize: '13px', color: '#333' }}>Solución del agente:</strong>
-               <p style={{ fontSize: '13px', color: '#555', marginTop: '4px' }}>
-                 {ticket.historial.slice().reverse().find(h => h.estado === 'Resuelto')?.comentario || 'El agente ha marcado el ticket como resuelto sin añadir un comentario detallado.'}
-               </p>
-             </div>
-             <p style={{ fontSize: '13px', color: '#555', marginBottom: '1rem' }}>
-                Si estás de acuerdo con la solución, por favor acéptala para cerrar el ticket.
-             </p>
-             <button style={{...styles.btn, background: '#27ae60'}} onClick={handleAceptarResolucion} disabled={enviando}>
-               {enviando ? 'Cerrando...' : 'Aceptar Solución y Cerrar Ticket'}
-             </button>
-           </div>
+          <section className="ticket-panel ticket-resolution" aria-labelledby="aceptar-title">
+            <p className="ticket-panel-kicker">Resolución</p>
+            <h2 id="aceptar-title">Aceptar solución</h2>
+            <blockquote>
+              {ticket.historial.slice().reverse().find(item => item.estado === 'Resuelto')?.comentario
+                || 'El agente marcó el ticket como resuelto sin añadir un comentario detallado.'}
+            </blockquote>
+            <p>Si la solución resolvió tu solicitud, cierra el ticket y completa la calificación.</p>
+            <button onClick={handleAceptarResolucion} disabled={Boolean(accion)}>
+              {accion === 'aceptar' ? 'Cerrando...' : 'Aceptar, cerrar y calificar'}
+            </button>
+          </section>
         )}
 
-        <div style={styles.card}>
-          <h3 style={styles.cardTitle}>Historial de cambios</h3>
-          {ticket.historial.length === 0 ? (
-            <p style={{ color: '#aaa', fontSize: '13px' }}>Sin cambios registrados</p>
-          ) : (
-            <div style={styles.timeline}>
-              {ticket.historial.map((h, i) => (
-                <div key={i} style={styles.timelineItem}>
-                  <span style={{ ...styles.timelineDot, background: COLOR_ESTADO[h.estado] || '#ccc' }} />
-                  <div style={styles.timelineContent}>
-                    <span style={{ fontSize: '13px', fontWeight: '500' }}>{h.estado}</span>
-                    <span style={{ fontSize: '12px', color: '#aaa' }}>
-                      {new Date(h.fecha).toLocaleString('es-GT')}
-                    </span>
-                    {h.comentario && <p style={{ fontSize: '12px', color: '#666', margin: '4px 0 0' }}>{h.comentario}</p>}
-                  </div>
-                </div>
-              ))}
+        <section className="ticket-panel ticket-history" aria-labelledby="historial-title">
+          <div className="ticket-panel-heading">
+            <div>
+              <p className="ticket-panel-kicker">Trazabilidad</p>
+              <h2 id="historial-title">Historial de cambios</h2>
             </div>
+          </div>
+          {ticket.historial.length === 0 ? (
+            <p className="ticket-history-empty">Sin cambios registrados.</p>
+          ) : (
+            <ol className="ticket-timeline">
+              {ticket.historial.map((item, index) => (
+                <li key={`${item.fecha}-${index}`}>
+                  <span className="ticket-timeline-dot" style={{ background: COLOR_ESTADO[item.estado] || '#64748b' }} />
+                  <div>
+                    <strong>{item.estado === 'EnProceso' ? 'En proceso' : item.estado}</strong>
+                    <time dateTime={item.fecha}>{new Date(item.fecha).toLocaleString('es-GT')}</time>
+                    {item.comentario && <p>{item.comentario}</p>}
+                  </div>
+                </li>
+              ))}
+            </ol>
           )}
-        </div>
-      </div>
+        </section>
+      </main>
     </div>
   )
 }
 
-function InfoRow({ label, value }) {
+function InfoItem({ label, value, emphasis = '' }) {
   return (
-    <div style={styles.row}>
-      <span style={styles.label}>{label}</span>
-      <span style={{ fontSize: '13px', color: '#1a1a2e' }}>{value}</span>
+    <div>
+      <dt>{label}</dt>
+      <dd className={emphasis ? `ticket-text-${emphasis}` : ''}>{value}</dd>
     </div>
   )
-}
-
-const styles = {
-  page: { minHeight: '100vh', background: '#f4f4f4', fontFamily: 'sans-serif' },
-  header: { background: '#1a1a2e', color: '#fff', padding: '1rem 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  backBtn: { background: 'transparent', borderWidth: '1px', borderStyle: 'solid', borderColor: 'rgba(255,255,255,0.3)', color: '#fff', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px' },
-  title: { fontWeight: '500', fontSize: '15px' },
-  container: { maxWidth: '600px', margin: '1.5rem auto', padding: '0 1rem' },
-  card: { background: '#fff', borderRadius: '12px', padding: '1.25rem', marginBottom: '1rem', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
-  cardTitle: { fontSize: '14px', fontWeight: '600', color: '#1a1a2e', marginBottom: '1rem' },
-  row: { display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottomWidth: '1px', borderBottomStyle: 'solid', borderBottomColor: '#f0f0f0' },
-  label: { fontSize: '13px', color: '#888' },
-  badge: { fontSize: '11px', padding: '2px 10px', borderRadius: '20px', color: '#fff', fontWeight: '500' },
-  badgeBanner: { fontSize: '11px', padding: '4px 12px', borderRadius: '4px', color: '#fff', fontWeight: 'bold', minWidth: '80px', textAlign: 'center' },
-  field: { marginBottom: '1rem' },
-  select: { width: '100%', padding: '10px 12px', borderRadius: '8px', borderWidth: '1px', borderStyle: 'solid', borderColor: '#ddd', fontSize: '14px', boxSizing: 'border-box' },
-  textarea: { width: '100%', padding: '10px 12px', borderRadius: '8px', borderWidth: '1px', borderStyle: 'solid', borderColor: '#ddd', fontSize: '14px', boxSizing: 'border-box', fontFamily: 'sans-serif' },
-  btn: { width: '100%', padding: '10px', background: '#1a1a2e', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '13px' },
-  escalarBtn: { padding: '6px 12px', background: '#f39c12', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' },
-  timeline: { display: 'flex', flexDirection: 'column', gap: '12px' },
-  timelineItem: { display: 'flex', gap: '12px', alignItems: 'flex-start' },
-  timelineDot: { width: '12px', height: '12px', borderRadius: '50%', marginTop: '2px', flexShrink: 0 },
-  timelineContent: { display: 'flex', flexDirection: 'column', gap: '2px' }
 }

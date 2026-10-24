@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import Pagination from '../components/molecules/Pagination';
+
+const PAGE_SIZE = 25;
 
 const COLOR_PRIORIDAD = {
   'Alta': '#e74c3c',
@@ -19,39 +22,48 @@ const COLOR_ESTADO = {
 export default function TicketsCoordinador() {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filtro, setFiltro] = useState('Todos');
+  const [pagina, setPagina] = useState(1);
   const navigate = useNavigate();
 
   useEffect(() => {
-    api.get('/tickets/abiertos')
-      .then(r => setTickets(r.data))
+    api.get('/metricas/tickets')
+      .then(r => {
+        setTickets(r.data.map(ticket => ({
+          idTicket: ticket.idticket,
+          tipologiaITIL: ticket.tipologiaitil,
+          prioridadSLA: ticket.prioridadsla,
+          estado: ticket.estado,
+          fechaCreacion: ticket.fechacreacion
+        })))
+        setPagina(1)
+      })
       .catch(() => setTickets([]))
       .finally(() => setLoading(false))
   }, []);
 
-  const ticketsFiltrados = filtro === 'Todos'
-    ? tickets
-    : tickets.filter(t => t.estado === filtro);
+  const totalPaginas = Math.max(1, Math.ceil(tickets.length / PAGE_SIZE));
+  const paginaActual = Math.min(pagina, totalPaginas);
+  const ticketsPaginados = tickets.slice((paginaActual - 1) * PAGE_SIZE, paginaActual * PAGE_SIZE);
 
   return (
     <div style={styles.page}>
       <div style={styles.header}>
         <button style={styles.backBtn} onClick={() => navigate(-1)}>← Volver</button>
-        <span style={styles.headerTitle}>Historial de tickets</span>
+        <span style={styles.headerTitle}>Todos los tickets</span>
         <span />
       </div>
 
-      <div style={styles.container}>
+      <main id="contenido-principal" style={styles.container}>
         <p style={styles.contador}>
-          {loading ? 'Cargando...' : `${ticketsFiltrados.length} ticket${ticketsFiltrados.length !== 1 ? 's' : ''}`}
+          {loading ? 'Cargando...' : `${tickets.length} ticket${tickets.length !== 1 ? 's' : ''} en total`}
         </p>
 
-        {!loading && ticketsFiltrados.length === 0 && (
-          <p style={styles.empty}>No hay tickets en este estado</p>
+        {!loading && tickets.length === 0 && (
+          <p style={styles.empty}>No hay tickets registrados</p>
         )}
 
         <div style={styles.lista}>
-          {ticketsFiltrados.map(t => (
+          {ticketsPaginados.map(t => (
             <div key={t.idTicket} style={styles.card}>
               <div style={styles.cardTop}>
                 <span style={styles.ticketId}>Ticket #{t.idTicket}</span>
@@ -67,21 +79,27 @@ export default function TicketsCoordinador() {
 
               <div style={styles.cardMid}>
                 <span style={styles.tipologia}>{t.tipologiaITIL}</span>
-                {t.descripcion && <p style={styles.descripcion}>{t.descripcion}</p>}
               </div>
 
               <div style={styles.cardBottom}>
                 <span style={styles.fecha}>
-                  {new Date(t.fechaCreacion).toLocaleDateString('es-GT', {
-                    day: '2-digit', month: 'short', year: 'numeric'
-                  })}
+                  {t.fechaCreacion}
                 </span>
                 <button style={styles.verBtn} onClick={() => navigate(`/tickets/${t.idTicket}`)}>Ver detalle</button>
               </div>
             </div>
           ))}
         </div>
-      </div>
+        {!loading && (
+          <Pagination
+            currentPage={paginaActual}
+            totalItems={tickets.length}
+            pageSize={PAGE_SIZE}
+            onPageChange={setPagina}
+            ariaLabel="Paginación de todos los tickets"
+          />
+        )}
+      </main>
     </div>
   )
 }

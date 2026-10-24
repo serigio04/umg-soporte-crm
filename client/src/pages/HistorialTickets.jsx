@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import Pagination from '../components/molecules/Pagination';
+
+const PAGE_SIZE = 15;
 
 const COLOR_ESTADO = {
   'Abierto': '#e74c3c',
@@ -10,16 +13,11 @@ const COLOR_ESTADO = {
   'Cerrado': '#3498db'
 }
 
-const COLOR_PRIORIDAD = {
-  'Alta':  '#e74c3c',
-  'Media': '#e67e22',
-  'Baja':  '#27ae60'
-}
-
 export default function HistorialTickets() {
   const [tickets, setTickets] = useState([])
   const [loading, setLoading] = useState(true)
   const [filtro, setFiltro] = useState('Todos')
+  const [pagina, setPagina] = useState(1)
   const navigate = useNavigate()
 
   const [encuestas, setEncuestas] = useState({})
@@ -28,6 +26,7 @@ export default function HistorialTickets() {
     api.get('/tickets')
       .then(r => {
         setTickets(r.data)
+        setPagina(1)
         // Cargar encuestas después de obtener tickets
         r.data.forEach(t => {
           if (t.estado === 'Resuelto' || t.estado === 'Cerrado') {
@@ -41,25 +40,23 @@ export default function HistorialTickets() {
       .finally(() => setLoading(false))
   }, []);
 
-  useEffect(() => {
-    tickets.forEach(t => {
-      if ((filtro === 'Resuelto' || filtro === 'Cerrado' || filtro === 'Todos') && (t.estado === 'Resuelto' || t.estado === 'Cerrado')) {
-        api.get(`/encuestas/ticket/${t.idTicket}`)
-          .then(enc => setEncuestas(prev => ({ ...prev, [t.idTicket]: enc.data })))
-          .catch(() => {})
-      }
-    })
-  }, [filtro, tickets])
-
   const filtros = ['Todos', 'Abierto', 'EnProceso', 'Pendiente', 'Resuelto', 'Cerrado'];
 
   const ticketsFiltrados = filtro === 'Todos'
     ? tickets
     : tickets.filter(t => t.estado === filtro);
+  const totalPaginas = Math.max(1, Math.ceil(ticketsFiltrados.length / PAGE_SIZE));
+  const paginaActual = Math.min(pagina, totalPaginas);
+  const ticketsPaginados = ticketsFiltrados.slice((paginaActual - 1) * PAGE_SIZE, paginaActual * PAGE_SIZE);
+
+  function cambiarFiltro(nuevoFiltro) {
+    setFiltro(nuevoFiltro)
+    setPagina(1)
+  }
 
   return (
-    <div style={styles.page}>
-      <div style={styles.header}>
+    <div className="crm-page" style={styles.page}>
+      <header className="crm-header" style={styles.header}>
         <button style={styles.backBtn} onClick={() => navigate('/estudiante/dashboard')}>
           ← Volver
         </button>
@@ -67,16 +64,17 @@ export default function HistorialTickets() {
         <button style={styles.newBtn} onClick={() => navigate('/tickets/nuevo')}>
           + Nuevo
         </button>
-      </div>
+      </header>
 
-      <div style={styles.container}>
+      <main id="contenido-principal" style={styles.container}>
         {/* Filtros */}
-        <div style={styles.filtros}>
+        <div className="crm-actions" style={styles.filtros} aria-label="Filtrar tickets por estado">
           {filtros.map(f => (
             <button
               key={f}
               style={{ ...styles.filtroBtn, ...(filtro === f ? styles.filtroBtnActive : {}) }}
-              onClick={() => setFiltro(f)}
+              onClick={() => cambiarFiltro(f)}
+              aria-pressed={filtro === f}
             >
               {f}
             </button>
@@ -91,13 +89,13 @@ export default function HistorialTickets() {
 
         {/* Lista */}
         {loading ? (
-          <p style={styles.empty}>Cargando tickets...</p>
+          <p style={styles.empty} role="status">Cargando tickets...</p>
         ) : ticketsFiltrados.length === 0 ? (
           <p style={styles.empty}>No hay tickets {filtro !== 'Todos' ? `con estado "${filtro}"` : 'registrados'}</p>
         ) : (
           <div style={styles.lista}>
-            {ticketsFiltrados.map(t => (
-              <div key={t.idTicket} style={styles.card}>
+            {ticketsPaginados.map(t => (
+              <article key={t.idTicket} className="crm-ticket-card" style={styles.card}>
                 <div style={styles.cardTop}>
                   <span style={styles.ticketId}>Ticket #{t.idTicket}</span>
                   <span style={{ ...styles.badge, background: COLOR_ESTADO[t.estado] }}>
@@ -110,32 +108,41 @@ export default function HistorialTickets() {
                   {t.descripcion && <p style={styles.descripcion}>{t.descripcion}</p>}
                 </div>
 
-                <div style={styles.cardBottom}>
+                <div className="crm-card-footer" style={styles.cardBottom}>
                   <span style={styles.fecha}>
                     {new Date(t.fechaCreacion).toLocaleDateString('es-GT', {
                       day: '2-digit', month: 'short', year: 'numeric'
                     })}
                   </span>
                   <div style={{ display: 'flex', gap: '8px' }}>
-                    {t.estado === 'Resuelto' && (
+                    {(t.estado === 'Resuelto' || t.estado === 'Cerrado') && encuestas[t.idTicket] && (
                       <button 
-                        style={{ ...styles.encuestaBtn, opacity: encuestas[t.idTicket] ? 1 : 0.5, cursor: encuestas[t.idTicket] ? 'pointer' : 'not-allowed' }}
+                        className="touch-target"
+                        style={styles.encuestaBtn}
                         onClick={() => navigate(`/encuesta/ticket/${t.idTicket}`)}
-                        disabled={!encuestas[t.idTicket]}
                       >
                         ⭐ Calificar
                       </button>
                     )}
-                    <button style={styles.verBtn} onClick={() => navigate(`/tickets/${t.idTicket}`)}>
+                    <button className="touch-target" style={styles.verBtn} aria-label={`Ver detalle del ticket ${t.idTicket}`} onClick={() => navigate(`/tickets/${t.idTicket}`)}>
                       Ver detalle
                     </button>
                   </div>
                 </div>
-              </div>
+              </article>
             ))}
           </div>
         )}
-      </div>
+        {!loading && (
+          <Pagination
+            currentPage={paginaActual}
+            totalItems={ticketsFiltrados.length}
+            pageSize={PAGE_SIZE}
+            onPageChange={setPagina}
+            ariaLabel="Paginación de mis tickets"
+          />
+        )}
+      </main>
     </div>
   )
 }

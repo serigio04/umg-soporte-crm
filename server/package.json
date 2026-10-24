@@ -7,16 +7,18 @@
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.21.0",
-    "swagger-ui-express": "^5.0.1",
-    "yamljs": "^0.3.0"
+    "socket.io": "^4.8.4",
+    "xss": "1.0.16"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"
   },
   "scripts": {
-    "dev": "node src/index.js",
-    "start": "node src/index.js",
-    "test": "node --test \"test/unit/**/*.test.js\" \"test/integration/**/*.test.js\"",
-    "test:e2e": "node --test \"test/e2e/**/*.test.js\""
+    "db:init": "node src/scripts/crearTablas.js",
+    "db:migrate": "node src/scripts/migrate.js",
+    "check": "node src/scripts/checkSyntax.js",
+    "test": "node --test",
+    "dev": "nodemon src/index.js",
+    "start": "node src/index.js"
   }
 }

@@ -22,6 +22,7 @@ API REST del sistema de gestión de tickets de soporte para estudiantes y catedr
 - **Base de datos:** PostgreSQL (Neon o local)
 - **Driver BD:** `pg` (node-postgres)
 - **Autenticación:** JWT (`jsonwebtoken`) + BCrypt (`bcryptjs`)
+- **Tiempo real:** Socket.IO con autenticación JWT y salas por ticket
 - **Variables de entorno:** `dotenv`
 
 ---
@@ -51,20 +52,18 @@ npm install
 
 ### 3. Crear el archivo de variables de entorno
 
-Este archivo **no está en el repositorio** por seguridad. Créalo manualmente en la raíz del proyecto (misma carpeta que `package.json`):
+Este archivo **no está en el repositorio** por seguridad. Usa `server/.env.example` como inventario de variables y completa `PORT`, `DB_CONNECTION`, `JWT_SECRET` y, cuando corresponda, `CORS_ORIGIN` con valores propios. Nunca publiques `.env`, cadenas de conexión, tokens ni claves.
 
-```env
-PORT=3000
-# Cadena de conexión PostgreSQL completa. Ejemplos:
-# Local: postgres://usuario:password@localhost:5432/nombre_basedatos
-# Neon / URL: postgres://<user>:<pass>@<host>/<db>
-DB_CONNECTION=postgres://UMG_ANALISIS:tu_password@localhost:5432/umgdb
-JWT_SECRET=una_clave_secreta_larga_y_segura
+### 4. Inicializar y migrar la base de datos
+
+```bash
+npm run db:init
+npm run db:migrate
 ```
 
-> ⚠️ **Importante:** Nunca subas el archivo `.env` al repositorio. Ya está incluido en el `.gitignore`.
+`db:migrate` aplica en orden los SQL numerados de `src/migrations`, registra versión y checksum en `schema_migrations`, usa bloqueo asesor y ejecuta cada archivo nuevo dentro de una transacción.
 
-### 4. Correr los scripts semilla
+### 5. Correr los scripts semilla
 
 Antes de correr el servidor por primera vez en **LOCAL**, ejecuta los scripts en este orden (desde la raíz del proyecto), en linea no es necesario:
 
@@ -79,23 +78,9 @@ node src/scripts/seedAgentes.js
 node src/scripts/seedCoordinador.js
 ```
 
-### Usuarios de prueba
+Las semillas son solo para entornos locales o aislados. Revisa sus datos antes de ejecutarlas y no reutilices credenciales de prueba en producción.
 
-| Rol | Correo | Contraseña | Detalle |
-|---|---|---|---|
-| Estudiante 1 | `sgomar@miumg.edu.gt` | `123456` | Sergio Gomar — Ingeniería en Sistemas |
-| Estudiante 2 | `fhipolito@miumg.edu.gt` | `123456` | Fabiola Hipolito — Ingeniería en Sistemas |
-| Estudiante 3 | `cdeleon@miumg.edu.gt` | `123456` | Claudia de Leon — Ingeniería en Sistemas |
-| Estudiante 4 | `ajacinto@miumg.edu.gt` | `123456` | Angie Jacinto — Ingeniería en Sistemas |
-| Agente | `incidentes@miumg.edu.gt` | `123456` | Especialidad: Incidente |
-| Agente | `solicitudes@miumg.edu.gt` | `123456` | Especialidad: Solicitud |
-| Agente | `cambios@miumg.edu.gt` | `123456` | Especialidad: Cambio |
-| Coordinador | `coordinador@miumg.edu.gt` | `123456` | NivelAcceso: 3 — puede crear usuarios |
-
-> ⚠️ Estos usuarios son solo para desarrollo y pruebas. Nunca uses estas credenciales en producción.
-
-
-### 5. Correr el servidor
+### 6. Correr el servidor
 
 ```bash
 # Desarrollo
@@ -107,7 +92,7 @@ npm start
 
 El servidor estará disponible en `http://localhost:3000`.
 
-### 6. Verificar que funciona
+### 7. Verificar que funciona
 
 ```bash
 curl http://localhost:3000/api/health
@@ -164,6 +149,7 @@ Los tickets creados por los E2E se identifican con un prefijo único y se elimin
 │   │   ├── agente.controller.js
 │   │   ├── auth.controller.js
 │   │   ├── conocimiento.controller.js
+│   │   ├── message.controller.js
 │   │   ├── metrics.controller.js
 │   │   ├── repair.controller.js
 │   │   ├── student.controller.js
@@ -174,11 +160,13 @@ Los tickets creados por los E2E se identifican con un prefijo único y se elimin
 │   │   ├── agente.service.js
 │   │   ├── auth.service.js
 │   │   ├── conocimiento.service.js
+│   │   ├── message.service.js
 │   │   ├── metrics.service.js
 │   │   ├── repair.service.js
 │   │   ├── student.service.js
 │   │   ├── survey.service.js
 │   │   ├── ticket.service.js
+│   │   ├── ticket-access.service.js
 │   │   └── user.service.js
 │   ├── routes/                    # Definición de endpoints
 │   │   ├── agente.route.js
@@ -194,12 +182,15 @@ Los tickets creados por los E2E se identifican con un prefijo único y se elimin
 │   │   └── auth.middleware.js     # Verificación JWT y roles
 │   ├── scripts/
 │   │   ├── crearTablas.js         # Crea las tablas en la BD
+│   │   ├── migrate.js              # Ejecuta migraciones SQL versionadas
 │   │   ├── seedAgente.js
 │   │   ├── seedAgentes.js
 │   │   ├── seedCoordinador.js
 │   │   ├── seedEstudiantes.js
 │   │   ├── seedUsuario.js
 │   │   └── testConocimiento.js
+│   ├── migrations/                # Migraciones SQL numeradas
+│   ├── realtime.js                # Socket.IO, autenticación y salas
 │   └── index.js                   # Punto de entrada
 ├── .env                           # Variables de entorno (NO en el repo)
 ├── .gitignore
@@ -223,10 +214,15 @@ Los tickets creados por los E2E se identifican con un prefijo único y se elimin
 | GET | `/api/tickets/ultimo` | Obtener último ticket abierto | Estudiante |
 | GET | `/api/tickets/historial/agente` | Obtener historial de tickets del agente | Agente, Coordinador |
 | GET | `/api/tickets/abiertos` | Obtener todos los tickets abiertos | Coordinador |
-| GET | `/api/tickets/:idTicket` | Obtener detalle de un ticket | Autenticado |
-| PUT | `/api/tickets/:idTicket/estado` | Cambiar estado del ticket | Agente, Coordinador |
-| PUT | `/api/tickets/:idTicket/aceptar` | Aceptar resolución del ticket | Estudiante |
-| PUT | `/api/tickets/:idTicket/escalar` | Escalar ticket a nivel superior | Agente |
+| GET | `/api/tickets/:idTicket` | Obtener detalle de un ticket | Propietario, asignado o Coordinador |
+| GET | `/api/tickets/:idTicket/mensajes` | Listar mensajes persistentes | Propietario, asignado o Coordinador |
+| POST | `/api/tickets/:idTicket/mensajes` | Enviar mensaje de texto | Propietario, asignado o Coordinador; no Cerrado |
+| PUT | `/api/tickets/:idTicket/prioridad` | Cambiar prioridad y reiniciar SLA | Agente asignado o Coordinador; solo activo |
+| GET | `/api/tickets/:idTicket/candidatos` | Listar agentes de especialidad compatible | Agente asignado o Coordinador; solo activo |
+| PUT | `/api/tickets/:idTicket/asignacion` | Reasignar a agente compatible | Agente asignado o Coordinador; solo activo |
+| PUT | `/api/tickets/:idTicket/estado` | Avanzar al siguiente estado permitido | Agente asignado, Coordinador |
+| PUT | `/api/tickets/:idTicket/aceptar` | Aceptar `Resuelto` y cerrar | Estudiante propietario |
+| PUT | `/api/tickets/:idTicket/escalar` | Escalar caso activo a Coordinación | Agente asignado |
 
 ### Agentes
 | Método | Endpoint | Descripción | Auth |
@@ -263,8 +259,9 @@ Los tickets creados por los E2E se identifican con un prefijo único y se elimin
 | Método | Endpoint | Descripción | Auth |
 |---|---|---|---|
 | GET | `/api/metricas/dashboard` | Dashboard del coordinador | Coordinador |
+| GET | `/api/metricas/tickets` | Datos de tickets del reporte en JSON | Coordinador |
 | GET | `/api/metricas/agente/:idAgente` | Métricas de un agente específico | Agente, Coordinador |
-| GET | `/api/metricas/reporte-csv` | Descargar reporte en CSV | Coordinador, Agente |
+| GET | `/api/metricas/reporte-csv` | Descargar reporte en CSV | Coordinador |
 | GET | `/api/metricas/reporte-excel` | Descargar reporte en Excel | Coordinador |
 | GET | `/api/metricas/reporte-calificaciones-excel` | Descargar reporte de calificaciones (Excel) | Coordinador |
 
@@ -278,6 +275,23 @@ Los tickets creados por los E2E se identifican con un prefijo único y se elimin
 | Método | Endpoint | Descripción | Auth |
 |---|---|---|---|
 | GET | `/api/repair.all/repair-all` | Reparar/sincronizar datos en BD | No |
+
+## Reglas del flujo de tickets
+
+- El flujo normal es estricto y unidireccional: `Abierto → EnProceso → Pendiente → Resuelto`.
+- Agente y Coordinador solo pueden aplicar el siguiente estado. No pueden retroceder, saltar etapas ni elegir `Cerrado`.
+- Solo el Estudiante propietario puede ejecutar `PUT /api/tickets/:idTicket/aceptar`, y únicamente desde `Resuelto`; la aceptación registra `Cerrado`.
+- `Abierto`, `EnProceso` y `Pendiente` son estados activos. Solo en ellos se puede cambiar prioridad, consultar candidatos o reasignar. Cambiar prioridad reinicia el límite SLA desde ese instante.
+- La reasignación exige que el Agente destino tenga especialidad exactamente igual a la tipología. El escalamiento es una operación separada que transfiere un caso activo al Coordinador y lo devuelve a `Abierto`.
+- Cuando soporte crea para un estudiante, `carnetEstudiante` debe usar `9989-XX-XXXXX`. El controlador valida la máscara y elimina los guiones para consultar el carné compacto almacenado.
+
+## Chat y Socket.IO
+
+- REST persiste mensajes de 1 a 4,000 caracteres en `GET/POST /api/tickets/:idTicket/mensajes`. Acceden únicamente el Estudiante propietario, el Agente actualmente asignado y Coordinación.
+- Los mensajes de un ticket `Cerrado` permanecen consultables, pero no se admiten envíos nuevos.
+- Socket.IO acepta el JWT en `auth.token` o en `Authorization: Bearer ...`. `ticket:join` comprueba acceso antes de unir la sala y `ticket:leave` la abandona.
+- El servidor emite `ticket:message` al crear mensajes y `ticket:updated` al modificar el ticket.
+- Después de reasignar, escalar o cambiar estado, `refrescarAccesosTicket` revisa la sala y expulsa sockets que ya no estén autorizados. El nuevo asignado se incorpora al abrir el detalle y emitir `ticket:join`; Estudiante propietario y Coordinación conservan acceso.
 
 ---
 
