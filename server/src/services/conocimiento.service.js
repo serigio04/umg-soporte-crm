@@ -1,4 +1,17 @@
 const { pool } = require('../config/db');
+const { FilterXSS } = require('xss');
+
+const filtroContenido = new FilterXSS({
+  whiteList: {
+    h1: [], h2: [], h3: [], h4: [], p: [], br: [], div: [], blockquote: [],
+    ul: [], ol: [], li: [], strong: [], b: [], em: [], i: [], u: [], s: [],
+    code: [], pre: [], a: ['href']
+  },
+  stripIgnoreTag: true,
+  stripIgnoreTagBody: ['script', 'style']
+});
+
+const sanitizarContenido = contenido => filtroContenido.process(contenido);
 
 /**
  * Obtener todos los artículos con filtros opcionales de búsqueda.
@@ -135,7 +148,7 @@ const crearArticulo = async ({ titulo, contenidoMarkdown, categoria }) => {
       `INSERT INTO articulos (titulo, contenidomarkdown, vistas, idbase)
        VALUES ($1, $2, 0, $3)
        RETURNING idarticulo, titulo, contenidomarkdown, vistas, idbase`,
-      [titulo.trim(), contenidoMarkdown, idBase]
+      [titulo.trim(), sanitizarContenido(contenidoMarkdown), idBase]
     );
 
     await client.query('COMMIT');
@@ -234,7 +247,9 @@ const actualizarArticulo = async (idArticulo, { titulo, contenidoMarkdown, categ
     }
 
     const finalTitulo = titulo !== undefined ? titulo.trim() : currentArt.titulo;
-    const finalContenido = contenidoMarkdown !== undefined ? contenidoMarkdown : currentArt.contenidomarkdown;
+    const finalContenido = contenidoMarkdown !== undefined
+      ? sanitizarContenido(contenidoMarkdown)
+      : currentArt.contenidomarkdown;
 
     const updateRes = await client.query(
       `UPDATE articulos

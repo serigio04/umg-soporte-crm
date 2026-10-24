@@ -1,415 +1,387 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import CambiarPassword from '../components/CambiarPassword'
+import Pagination from '../components/molecules/Pagination'
+
+const PAGE_SIZE = 15
+
+const EXPORTS = {
+  csv: {
+    endpoint: '/metricas/reporte-csv',
+    filename: 'reporte_tickets.csv',
+    label: 'Tickets en CSV'
+  },
+  excel: {
+    endpoint: '/metricas/reporte-excel',
+    filename: 'reporte_tickets.xlsx',
+    label: 'Tickets en Excel'
+  },
+  ratings: {
+    endpoint: '/metricas/reporte-calificaciones-excel',
+    filename: 'reporte_calificaciones_agentes.xlsx',
+    label: 'Calificaciones en Excel'
+  }
+}
+
+function obtenerMetricas() {
+  return api.get('/metricas/dashboard').then(response => response.data)
+}
+
+function formatearFecha(fecha) {
+  return fecha ? new Date(fecha).toLocaleString('es-GT') : 'Aún abierto'
+}
 
 export default function DashboardCoordinador() {
   const [metricas, setMetricas] = useState(null)
-  const [agentes, setAgentes] = useState([])
-  const [editandoAgente, setEditandoAgente] = useState(null)
-  const [nuevaEspecialidad, setNuevaEspecialidad] = useState('')
+  const [errorMetricas, setErrorMetricas] = useState('')
+  const [actualizando, setActualizando] = useState(false)
   const [showPasswordModal, setShowPasswordModal] = useState(false)
   const [paginaSLA, setPaginaSLA] = useState(1)
-  const [paginaAgentes, setPaginaAgentes] = useState(1)
   const [slideIndex, setSlideIndex] = useState(0)
-  const itemsPerPage = 20
+  const [exportando, setExportando] = useState('')
+  const [exportFeedback, setExportFeedback] = useState(null)
+  const [exportMenuOpen, setExportMenuOpen] = useState(false)
   const navigate = useNavigate()
 
-  const slaPaginados = metricas?.slaVencidos ? metricas.slaVencidos.slice((paginaSLA - 1) * itemsPerPage, paginaSLA * itemsPerPage) : []
-  const totalPaginasSLA = metricas?.slaVencidos ? Math.ceil(metricas.slaVencidos.length / itemsPerPage) : 0
-
-  const agentesPaginados = agentes.slice((paginaAgentes - 1) * itemsPerPage, paginaAgentes * itemsPerPage)
-  const totalPaginasAgentes = Math.ceil(agentes.length / itemsPerPage)
-
-  const fetchMetricas = () => {
-    api.get('/metricas/dashboard')
-      .then(r => {
-        setMetricas(r.data)
-        setSlideIndex(0)
-      })
-      .catch(console.error)
-  }
-
-  const sliderData = []
-  if (metricas) {
-    sliderData.push({
-      nombre: 'General (Todos los agentes)',
-      porcentaje: metricas.calificacionGeneral?.porcentaje_calificacion || 0,
-      promedio: metricas.calificacionGeneral?.promedio_calificacion || 0
-    })
-    if (metricas.calificacionesPorAgente) {
-      metricas.calificacionesPorAgente.forEach(a => {
-        sliderData.push({
-          nombre: a.agente,
-          porcentaje: a.porcentaje_calificacion || 0,
-          promedio: a.promedio_calificacion || 0
-        })
-      })
-    }
-  }
-
-  const handleNextSlide = () => {
-    setSlideIndex((prev) => (prev + 1) % sliderData.length)
-  }
-  const handlePrevSlide = () => {
-    setSlideIndex((prev) => (prev === 0 ? sliderData.length - 1 : prev - 1))
-  }
-  const currentSlide = sliderData[slideIndex]
-
-  const fetchAgentes = () => {
-    api.get('/usuarios/agentes')
-      .then(r => setAgentes(r.data))
-      .catch(console.error)
-  }
+  const slaVencidos = metricas?.slaVencidos || []
+  const totalPaginasSLA = Math.max(1, Math.ceil(slaVencidos.length / PAGE_SIZE))
+  const paginaActualSLA = Math.min(paginaSLA, totalPaginasSLA)
+  const slaPaginados = slaVencidos.slice(
+    (paginaActualSLA - 1) * PAGE_SIZE,
+    paginaActualSLA * PAGE_SIZE
+  )
+  const ticketsAbiertos = (metricas?.ticketsAbiertosPorAgente || []).reduce(
+    (total, agente) => total + Number(agente.cantidad || 0),
+    0
+  )
+  const satisfaccion = metricas
+    ? [
+        {
+          nombre: 'General (todos los agentes)',
+          porcentaje: metricas.calificacionGeneral?.porcentaje_calificacion || 0,
+          promedio: metricas.calificacionGeneral?.promedio_calificacion || 0
+        },
+        ...(metricas.calificacionesPorAgente || []).map(agente => ({
+          nombre: agente.agente,
+          porcentaje: agente.porcentaje_calificacion || 0,
+          promedio: agente.promedio_calificacion || 0
+        }))
+      ]
+    : []
+  const currentSlide = satisfaccion[slideIndex] || satisfaccion[0]
 
   useEffect(() => {
-    fetchMetricas()
-    fetchAgentes()
-    const intervalId = setInterval(fetchMetricas, 300000) // 5 minutos
-    
-    return () => clearInterval(intervalId)
+    let activo = true
+
+    const cargar = async () => {
+      try {
+        const data = await obtenerMetricas()
+        if (!activo) return
+        setMetricas(data)
+        setErrorMetricas('')
+        setPaginaSLA(1)
+        setSlideIndex(0)
+      } catch {
+        if (activo) setErrorMetricas('No se pudieron cargar las métricas. Intenta actualizar nuevamente.')
+      }
+    }
+
+    cargar()
+    const intervalId = window.setInterval(cargar, 300000)
+
+    return () => {
+      activo = false
+      window.clearInterval(intervalId)
+    }
   }, [])
+
+  async function actualizarMetricas() {
+    setActualizando(true)
+    try {
+      const data = await obtenerMetricas()
+      setMetricas(data)
+      setErrorMetricas('')
+      setPaginaSLA(1)
+      setSlideIndex(0)
+    } catch {
+      setErrorMetricas('No se pudieron actualizar las métricas. Intenta nuevamente.')
+    } finally {
+      setActualizando(false)
+    }
+  }
 
   function cerrarSesion() {
     localStorage.clear()
     navigate('/login')
   }
 
-  function descargarReporte() {
-    api.get('/metricas/reporte-csv', { responseType: 'blob' })
-      .then(response => {
-        const url = window.URL.createObjectURL(new Blob([response.data]))
-        const link = document.createElement('a')
-        link.href = url
-        link.setAttribute('download', 'reporte_tickets.csv')
-        document.body.appendChild(link)
-        link.click()
-        link.parentNode.removeChild(link)
-      })
-      .catch(console.error)
-  }
+  async function descargarReporte(tipo) {
+    const reporte = EXPORTS[tipo]
+    setExportando(tipo)
+    setExportFeedback(null)
 
-  function descargarReporteExcel() {
-    api.get('/metricas/reporte-excel', { responseType: 'blob' })
-      .then(response => {
-        const url = window.URL.createObjectURL(new Blob([response.data]))
-        const link = document.createElement('a')
-        link.href = url
-        link.setAttribute('download', 'reporte_tickets.xlsx')
-        document.body.appendChild(link)
-        link.click()
-        link.parentNode.removeChild(link)
-      })
-      .catch(console.error)
-  }
-
-  function descargarReporteCalificaciones() {
-    api.get('/metricas/reporte-calificaciones-excel', { responseType: 'blob' })
-      .then(response => {
-        const url = window.URL.createObjectURL(new Blob([response.data]))
-        const link = document.createElement('a')
-        link.href = url
-        link.setAttribute('download', 'reporte_calificaciones_agentes.xlsx')
-        document.body.appendChild(link)
-        link.click()
-        link.parentNode.removeChild(link)
-      })
-      .catch(console.error)
-  }
-
-  async function guardarEspecialidad(idAgente) {
-    if (!nuevaEspecialidad) return;
     try {
-      await api.put(`/usuarios/agentes/${idAgente}/especialidad`, { especialidad: nuevaEspecialidad })
-      setEditandoAgente(null)
-      setNuevaEspecialidad('')
-      fetchAgentes()
-    } catch (err) {
-      alert(err.response?.data?.message || 'Error al actualizar especialidad')
+      const response = await api.get(reporte.endpoint, { responseType: 'blob' })
+      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const link = document.createElement('a')
+
+      try {
+        link.href = url
+        link.download = reporte.filename
+        document.body.appendChild(link)
+        link.click()
+      } finally {
+        link.remove()
+        window.URL.revokeObjectURL(url)
+      }
+
+      setExportFeedback({ type: 'success', message: `${reporte.label} se descargó correctamente.` })
+      setExportMenuOpen(false)
+    } catch {
+      setExportFeedback({ type: 'error', message: `No se pudo descargar ${reporte.label.toLowerCase()}. Intenta nuevamente.` })
+    } finally {
+      setExportando('')
     }
   }
 
+  function mostrarSatisfaccionAnterior() {
+    setSlideIndex(index => (index === 0 ? satisfaccion.length - 1 : index - 1))
+  }
+
+  function mostrarSatisfaccionSiguiente() {
+    setSlideIndex(index => (index + 1) % satisfaccion.length)
+  }
+
   return (
-    <div style={styles.page}>
-      <div style={styles.header}>
-        <span style={styles.headerTitle}>Sistema de Soporte UMG — Coordinador</span>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button onClick={() => setShowPasswordModal(true)} style={styles.logoutBtn}>🔑 Cambiar contraseña</button>
-          <button onClick={cerrarSesion} style={styles.logoutBtn}>Cerrar sesión</button>
+    <div className="coordinator-dashboard">
+      <header className="coordinator-dashboard__header">
+        <div>
+          <p className="coordinator-dashboard__eyebrow">Sistema de Soporte UMG</p>
+          <span className="coordinator-dashboard__brand">Panel de coordinación</span>
         </div>
-      </div>
+        <div className="coordinator-dashboard__session-actions">
+          <button type="button" onClick={() => setShowPasswordModal(true)}>Cambiar contraseña</button>
+          <button type="button" onClick={cerrarSesion}>Cerrar sesión</button>
+        </div>
+      </header>
 
       {showPasswordModal && <CambiarPassword onClose={() => setShowPasswordModal(false)} />}
 
-      <div style={styles.section}>
-        <h3 style={styles.sectionTitle}>Acciones de Coordinación</h3>
-        <div style={styles.btnGroup}>
-          <button style={styles.actionBtnGerencial} onClick={() => navigate('/agente/crear-estudiante')}>
-            👤 Nuevo estudiante
-          </button>
-          <button style={styles.actionBtnGerencial} onClick={() => navigate('/agente/crear-agente')}>
-            🛠️ Nuevo agente
-          </button>
-          <button style={styles.actionBtnGerencial} onClick={() => navigate('/coordinador/tickets')}>
-            🎫 Todos los tickets
-          </button>
-          <button style={{ ...styles.actionBtn, background: '#27ae60' }} onClick={descargarReporte}>
-            📊 Descargar CSV
-          </button>
-          <button style={{ ...styles.actionBtn, background: '#2980b9' }} onClick={descargarReporteExcel}>
-            📊 Descargar Excel
-          </button>
-          <button style={{ ...styles.actionBtn, background: '#8e44ad' }} onClick={descargarReporteCalificaciones}>
-            📊 Calificaciones (Excel)
-          </button>
-        </div>
-      </div>
-
-      <div style={styles.grid}>
-        {/* Metrica: Tiempo de resolucion */}
-        <div style={styles.card}>
-          <h4 style={styles.cardTitle}>Tiempo promedio de resolución</h4>
-          <div style={styles.bigMetric}>
-            {metricas ? Number(metricas.tiempoPromedioResolucionHoras).toFixed(1) : '...'} hrs
+      <main id="contenido-principal" className="coordinator-dashboard__main">
+        <section className="coordinator-dashboard__hero" aria-labelledby="coordinator-title">
+          <div>
+            <p className="coordinator-dashboard__eyebrow">Resumen operativo</p>
+            <h1 id="coordinator-title">Métricas de soporte</h1>
+            <p>Supervisa la carga del equipo, los tiempos de atención y el cumplimiento de SLA.</p>
           </div>
-          <h4 style={{ ...styles.cardTitle, marginTop: '1rem', fontSize: '13px', color: '#555' }}>Desglosado por agente</h4>
-          {metricas ? (
-            <table style={{ ...styles.table, marginTop: '0.5rem' }}>
-              <tbody>
-                {metricas.tiempoPromedioPorAgente?.map((a, i) => (
-                  <tr key={i}>
-                    <td style={{ ...styles.td, fontSize: '12px', padding: '6px 10px' }}>{a.agente}</td>
-                    <td style={{ ...styles.td, fontSize: '12px', padding: '6px 10px', textAlign: 'right', fontWeight: 'bold' }}>
-                      {Number(a.tiempo_promedio_horas).toFixed(1)} hrs
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : null}
-        </div>
+          <button
+            type="button"
+            className="coordinator-dashboard__refresh"
+            onClick={actualizarMetricas}
+            disabled={actualizando}
+          >
+            {actualizando ? 'Actualizando...' : 'Actualizar métricas'}
+          </button>
+        </section>
 
-        {/* Metrica: Tickets por agente */}
-        <div style={styles.card}>
-          <h4 style={styles.cardTitle}>Tickets abiertos por agente</h4>
-          {metricas ? (
-            <table style={styles.table}>
-              <tbody>
-                {metricas.ticketsAbiertosPorAgente.map((a, i) => (
-                  <tr key={i}>
-                    <td style={styles.td}>{a.agente}</td>
-                    <td style={{ ...styles.td, textAlign: 'right', fontWeight: 'bold' }}>{a.cantidad}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : <p style={styles.loading}>Cargando...</p>}
-        </div>
+        {errorMetricas && (
+          <p className="coordinator-dashboard__feedback coordinator-dashboard__feedback--error" role="alert">
+            {errorMetricas}
+          </p>
+        )}
 
-        {/* Metrica: Calificaciones (Donut Chart Slider) */}
-        <div style={styles.card}>
-          <h4 style={styles.cardTitle}>Nivel de Satisfacción (Calificaciones)</h4>
-          {metricas && sliderData.length > 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              
-              <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '1rem' }}>
-                <button onClick={handlePrevSlide} style={styles.arrowBtn}>⬅️</button>
-                <div style={{ textAlign: 'center', width: '200px' }}>
-                  <h5 style={{ margin: 0, fontSize: '14px', color: '#333' }}>{currentSlide.nombre}</h5>
-                  <p style={{ margin: 0, fontSize: '12px', color: '#777' }}>
-                    Promedio: {Number(currentSlide.promedio).toFixed(1)} / 5.0
-                  </p>
-                </div>
-                <button onClick={handleNextSlide} style={styles.arrowBtn}>➡️</button>
-              </div>
+        <section className="coordinator-dashboard__toolbar" aria-labelledby="acciones-coordinacion">
+          <div>
+            <h2 id="acciones-coordinacion">Acciones de coordinación</h2>
+            <nav className="coordinator-dashboard__nav" aria-label="Acciones de coordinación">
+              <Link to="/agente/crear-estudiante">Nuevo estudiante</Link>
+              <Link to="/agente/crear-agente">Nuevo agente</Link>
+              <Link to="/coordinador/tickets">Todos los tickets</Link>
+              <Link to="/coordinador/agentes">Gestionar agentes</Link>
+              <Link to="/agente/conocimiento">Base de conocimiento</Link>
+            </nav>
+          </div>
 
-              <div style={{
-                width: '120px',
-                height: '120px',
-                borderRadius: '50%',
-                background: `conic-gradient(#1abc9c ${currentSlide.porcentaje}%, #eee 0)`,
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                position: 'relative'
-              }}>
-                <div style={{
-                  width: '90px',
-                  height: '90px',
-                  background: '#fff',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  flexDirection: 'column'
-                }}>
-                  <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#1a1a2e' }}>
-                    {Number(currentSlide.porcentaje).toFixed(0)}%
-                  </span>
-                </div>
-              </div>
-
+          <details
+            className="coordinator-dashboard__exports"
+            open={exportMenuOpen}
+            onToggle={event => setExportMenuOpen(event.currentTarget.open)}
+          >
+            <summary>Exportar reportes</summary>
+            <div className="coordinator-dashboard__export-menu" role="group" aria-label="Formatos de exportación">
+              {Object.entries(EXPORTS).map(([tipo, reporte]) => (
+                <button
+                  key={tipo}
+                  type="button"
+                  onClick={() => descargarReporte(tipo)}
+                  disabled={Boolean(exportando)}
+                >
+                  {exportando === tipo ? 'Preparando descarga...' : reporte.label}
+                </button>
+              ))}
             </div>
-          ) : (
-            <p style={styles.loading}>No hay encuestas respondidas aún</p>
+          </details>
+        </section>
+
+        <div className="coordinator-dashboard__feedback-slot" aria-live="polite" aria-atomic="true">
+          {exportFeedback && (
+            <p className={`coordinator-dashboard__feedback coordinator-dashboard__feedback--${exportFeedback.type}`}>
+              {exportFeedback.message}
+            </p>
           )}
         </div>
-      </div>
 
-      {/* SLA Vencidos */}
-      <div style={styles.section}>
-        <div style={styles.card}>
-          <h4 style={styles.cardTitle}>Tickets con SLA Incumplido (Vencidos)</h4>
-          {metricas ? (
-             metricas.slaVencidos.length === 0 ? (
-               <p style={{ color: '#27ae60', padding: '10px 0' }}>✅ No hay tickets vencidos</p>
-             ) : (
-               <>
-               <table style={styles.table}>
-                 <thead>
-                   <tr>
-                     <th style={styles.th}>ID Ticket</th>
-                     <th style={styles.th}>Prioridad</th>
-                     <th style={styles.th}>Agente Asignado</th>
-                     <th style={styles.th}>Fecha Creación</th>
-                     <th style={styles.th}>Fecha Resolución</th>
-                   </tr>
-                 </thead>
-                 <tbody>
-                   {slaPaginados.map((t, i) => (
-                     <tr key={i}>
-                       <td style={styles.td}>#{t.idticket}</td>
-                       <td style={styles.td}>
-                          <span style={{...styles.badge, background: t.prioridadsla === 'Alta' ? '#e74c3c' : t.prioridadsla === 'Media' ? '#e67e22' : '#27ae60' }}>
-                            {t.prioridadsla}
-                          </span>
-                       </td>
-                       <td style={styles.td}>{t.agente || 'Sin asignar'}</td>
-                       <td style={styles.td}>{new Date(t.fechacreacion).toLocaleString('es-GT')}</td>
-                       <td style={styles.td}>
-                         {t.fecharesolucion ? new Date(t.fecharesolucion).toLocaleString('es-GT') : <span style={{ color: '#e67e22', fontWeight: 'bold' }}>Aún abierto</span>}
-                       </td>
-                     </tr>
-                   ))}
-                 </tbody>
-               </table>
-               {totalPaginasSLA > 1 && (
-                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem' }}>
-                   <button 
-                     style={{...styles.actionBtn, padding: '6px 12px', background: paginaSLA === 1 ? '#ccc' : '#1a1a2e', cursor: paginaSLA === 1 ? 'not-allowed' : 'pointer' }}
-                     disabled={paginaSLA === 1}
-                     onClick={() => setPaginaSLA(p => p - 1)}
-                   >Anterior</button>
-                   <span style={{ fontSize: '13px' }}>Página {paginaSLA} de {totalPaginasSLA}</span>
-                   <button 
-                     style={{...styles.actionBtn, padding: '6px 12px', background: paginaSLA === totalPaginasSLA ? '#ccc' : '#1a1a2e', cursor: paginaSLA === totalPaginasSLA ? 'not-allowed' : 'pointer' }}
-                     disabled={paginaSLA === totalPaginasSLA}
-                     onClick={() => setPaginaSLA(p => p + 1)}
-                   >Siguiente</button>
-                 </div>
-               )}
-              </>
-             )
-          ) : <p style={styles.loading}>Cargando...</p>}
-        </div>
-      </div>
+        <section className="coordinator-dashboard__kpis" aria-label="Indicadores principales">
+          <article className="coordinator-dashboard__kpi">
+            <p>Tickets abiertos</p>
+            <strong>{metricas ? ticketsAbiertos : '...'}</strong>
+            <span>En todo el equipo</span>
+          </article>
+          <article className="coordinator-dashboard__kpi">
+            <p>Resolución promedio</p>
+            <strong>{metricas ? `${Number(metricas.tiempoPromedioResolucionHoras).toFixed(1)} h` : '...'}</strong>
+            <span>Hasta resolución o cierre</span>
+          </article>
+          <article className={`coordinator-dashboard__kpi ${slaVencidos.length ? 'coordinator-dashboard__kpi--warning' : ''}`}>
+            <p>SLA incumplidos</p>
+            <strong>{metricas ? slaVencidos.length : '...'}</strong>
+            <span>{slaVencidos.length ? 'Requieren seguimiento' : 'Sin incidencias registradas'}</span>
+          </article>
+        </section>
 
-      {/* Lista de Agentes */}
-      <div style={styles.section}>
-        <div style={styles.card}>
-          <h4 style={styles.cardTitle}>Gestión de Agentes</h4>
-          {agentes.length === 0 ? (
-            <p style={styles.loading}>Cargando agentes...</p>
+        <section className="coordinator-dashboard__metrics-grid" aria-label="Detalle de métricas">
+          <article className="coordinator-dashboard__panel">
+            <div className="coordinator-dashboard__panel-heading">
+              <div>
+                <p className="coordinator-dashboard__eyebrow">Carga operativa</p>
+                <h2>Tickets abiertos por agente</h2>
+              </div>
+            </div>
+            {metricas ? (
+              <div className="coordinator-dashboard__table-region" tabIndex="0">
+                <table>
+                  <caption className="visually-hidden">Cantidad de tickets abiertos por agente</caption>
+                  <thead><tr><th scope="col">Agente</th><th scope="col">Tickets</th></tr></thead>
+                  <tbody>
+                    {(metricas.ticketsAbiertosPorAgente || []).map(agente => (
+                      <tr key={agente.agente}><td>{agente.agente}</td><td>{agente.cantidad}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : <p className="coordinator-dashboard__empty">Cargando métricas...</p>}
+          </article>
+
+          <article className="coordinator-dashboard__panel">
+            <div className="coordinator-dashboard__panel-heading">
+              <div>
+                <p className="coordinator-dashboard__eyebrow">Rendimiento</p>
+                <h2>Resolución por agente</h2>
+              </div>
+            </div>
+            {metricas ? (
+              <div className="coordinator-dashboard__table-region" tabIndex="0">
+                <table>
+                  <caption className="visually-hidden">Tiempo promedio de resolución por agente</caption>
+                  <thead><tr><th scope="col">Agente</th><th scope="col">Promedio</th></tr></thead>
+                  <tbody>
+                    {(metricas.tiempoPromedioPorAgente || []).map(agente => (
+                      <tr key={agente.agente}>
+                        <td>{agente.agente}</td>
+                        <td>{Number(agente.tiempo_promedio_horas).toFixed(1)} h</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : <p className="coordinator-dashboard__empty">Cargando métricas...</p>}
+          </article>
+
+          <article className="coordinator-dashboard__panel coordinator-dashboard__satisfaction">
+            <div className="coordinator-dashboard__panel-heading">
+              <div>
+                <p className="coordinator-dashboard__eyebrow">Experiencia</p>
+                <h2>Nivel de satisfacción</h2>
+              </div>
+            </div>
+            {currentSlide ? (
+              <div className="coordinator-dashboard__rating">
+                <div
+                  className="coordinator-dashboard__rating-ring"
+                  style={{ '--rating': `${Number(currentSlide.porcentaje)}%` }}
+                  role="img"
+                  aria-label={`${Number(currentSlide.porcentaje).toFixed(0)} por ciento de satisfacción`}
+                >
+                  <span>{Number(currentSlide.porcentaje).toFixed(0)}%</span>
+                </div>
+                <div className="coordinator-dashboard__rating-copy" aria-live="polite">
+                  <strong>{currentSlide.nombre}</strong>
+                  <span>Promedio: {Number(currentSlide.promedio).toFixed(1)} de 5</span>
+                  <span>{slideIndex + 1} de {satisfaccion.length}</span>
+                </div>
+                {satisfaccion.length > 1 && (
+                  <div className="coordinator-dashboard__rating-controls">
+                    <button type="button" onClick={mostrarSatisfaccionAnterior} aria-label="Mostrar satisfacción anterior">Anterior</button>
+                    <button type="button" onClick={mostrarSatisfaccionSiguiente} aria-label="Mostrar satisfacción siguiente">Siguiente</button>
+                  </div>
+                )}
+              </div>
+            ) : <p className="coordinator-dashboard__empty">No hay encuestas respondidas aún.</p>}
+          </article>
+        </section>
+
+        <section className="coordinator-dashboard__panel coordinator-dashboard__sla" aria-labelledby="sla-title">
+          <div className="coordinator-dashboard__panel-heading">
+            <div>
+              <p className="coordinator-dashboard__eyebrow">Cumplimiento</p>
+              <h2 id="sla-title">Tickets con SLA incumplido</h2>
+            </div>
+            {metricas && <span className="coordinator-dashboard__count">{slaVencidos.length} tickets</span>}
+          </div>
+
+          {!metricas ? (
+            <p className="coordinator-dashboard__empty">Cargando métricas...</p>
+          ) : slaVencidos.length === 0 ? (
+            <p className="coordinator-dashboard__empty coordinator-dashboard__empty--success">No hay tickets vencidos.</p>
           ) : (
             <>
-            <table style={styles.table}>
-              <thead>
-                <tr>
-                  <th style={styles.th}>Nombre</th>
-                  <th style={styles.th}>Correo</th>
-                  <th style={styles.th}>Especialidad</th>
-                  <th style={styles.th}>Acción</th>
-                </tr>
-              </thead>
-              <tbody>
-                {agentesPaginados.map((a) => (
-                  <tr key={a.idagente}>
-                    <td style={styles.td}>{a.nombrecompleto}</td>
-                    <td style={styles.td}>{a.correoinstitucional}</td>
-                    <td style={styles.td}>
-                      {editandoAgente === a.idagente ? (
-                        <select 
-                          value={nuevaEspecialidad} 
-                          onChange={(e) => setNuevaEspecialidad(e.target.value)}
-                          style={{ padding: '4px 8px', borderRadius: '4px', borderWidth: '1px', borderStyle: 'solid', borderColor: '#ccc', fontFamily: 'sans-serif' }}
-                        >
-                          <option value="Incidente">Incidente</option>
-                          <option value="Solicitud">Solicitud</option>
-                          <option value="Cambio">Cambio</option>
-                          <option value="General">General</option>
-                        </select>
-                      ) : (
-                        a.especialidad
-                      )}
-                    </td>
-                    <td style={styles.td}>
-                      {editandoAgente === a.idagente ? (
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                          <button style={{ ...styles.actionBtn, background: '#27ae60', padding: '6px 10px' }} onClick={() => guardarEspecialidad(a.idagente)}>Guardar</button>
-                          <button style={{ ...styles.actionBtn, background: '#e74c3c', padding: '6px 10px' }} onClick={() => setEditandoAgente(null)}>Cancelar</button>
-                        </div>
-                      ) : (
-                        <button style={{ ...styles.actionBtn, background: '#f39c12', padding: '6px 10px' }} onClick={() => { setEditandoAgente(a.idagente); setNuevaEspecialidad(a.especialidad); }}>
-                          ✏️ Modificar
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {totalPaginasAgentes > 1 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem' }}>
-                <button 
-                  style={{...styles.actionBtn, padding: '6px 12px', background: paginaAgentes === 1 ? '#ccc' : '#1a1a2e', cursor: paginaAgentes === 1 ? 'not-allowed' : 'pointer' }}
-                  disabled={paginaAgentes === 1}
-                  onClick={() => setPaginaAgentes(p => p - 1)}
-                >Anterior</button>
-                <span style={{ fontSize: '13px' }}>Página {paginaAgentes} de {totalPaginasAgentes}</span>
-                <button 
-                  style={{...styles.actionBtn, padding: '6px 12px', background: paginaAgentes === totalPaginasAgentes ? '#ccc' : '#1a1a2e', cursor: paginaAgentes === totalPaginasAgentes ? 'not-allowed' : 'pointer' }}
-                  disabled={paginaAgentes === totalPaginasAgentes}
-                  onClick={() => setPaginaAgentes(p => p + 1)}
-                >Siguiente</button>
+              <div className="coordinator-dashboard__table-region" tabIndex="0">
+                <table>
+                  <caption className="visually-hidden">Tickets que incumplieron el acuerdo de nivel de servicio</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Ticket</th>
+                      <th scope="col">Prioridad</th>
+                      <th scope="col">Agente asignado</th>
+                      <th scope="col">Creación</th>
+                      <th scope="col">Resolución</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {slaPaginados.map(ticket => (
+                      <tr key={ticket.idticket}>
+                        <td>#{ticket.idticket}</td>
+                        <td><span className={`coordinator-dashboard__priority coordinator-dashboard__priority--${ticket.prioridadsla?.toLowerCase()}`}>{ticket.prioridadsla}</span></td>
+                        <td>{ticket.agente || 'Sin asignar'}</td>
+                        <td>{formatearFecha(ticket.fechacreacion)}</td>
+                        <td>{formatearFecha(ticket.fecharesolucion)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            )}
+              <Pagination
+                currentPage={paginaActualSLA}
+                totalItems={slaVencidos.length}
+                pageSize={PAGE_SIZE}
+                onPageChange={setPaginaSLA}
+                ariaLabel="Paginación de tickets con SLA incumplido"
+              />
             </>
           )}
-        </div>
-      </div>
-      <div style={{height: '2rem'}}></div>
+        </section>
+      </main>
     </div>
   )
-}
-
-const styles = {
-  page: { minHeight: '100vh', background: '#f4f4f4', fontFamily: 'sans-serif' },
-  header: { background: '#6c3483', color: '#fff', padding: '1rem 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  headerTitle: { fontWeight: '500', fontSize: '15px' },
-  logoutBtn: { background: 'transparent', borderWidth: '1px', borderStyle: 'solid', borderColor: 'rgba(255,255,255,0.3)', color: '#fff', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px' },
-  section: { padding: '1.5rem 2rem 0' },
-  sectionTitle: { fontSize: '15px', fontWeight: '500', color: '#1a1a2e', marginBottom: '1rem' },
-  btnGroup: { display: 'flex', gap: '12px', flexWrap: 'wrap' },
-  actionBtn: { padding: '10px 20px', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '13px' },
-  actionBtnGerencial: { padding: '10px 20px', background: '#6c3483', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '13px' },
-  grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', padding: '1.5rem 2rem' },
-  card: { background: '#fff', borderRadius: '12px', padding: '1.25rem', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
-  cardTitle: { fontSize: '14px', fontWeight: '600', color: '#1a1a2e', marginBottom: '1rem' },
-  bigMetric: { fontSize: '2rem', fontWeight: 'bold', color: '#1a1a2e', textAlign: 'center', padding: '1rem' },
-  table: { width: '100%', borderCollapse: 'collapse' },
-  th: { textAlign: 'left', padding: '10px', fontSize: '13px', color: '#555', borderBottomWidth: '2px', borderBottomStyle: 'solid', borderBottomColor: '#eee' },
-  td: { padding: '10px', fontSize: '14px', borderBottomWidth: '1px', borderBottomStyle: 'solid', borderBottomColor: '#eee', color: '#333' },
-  loading: { fontSize: '13px', color: '#aaa', textAlign: 'center', padding: '1rem 0' },
-  badge: { fontSize: '11px', padding: '2px 10px', borderRadius: '20px', color: '#fff', fontWeight: '500' },
-  arrowBtn: { background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '1.5rem', padding: '0 10px' }
 }

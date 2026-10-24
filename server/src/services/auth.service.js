@@ -13,9 +13,6 @@ const login = async ({ correo, password }) => {
   if (result.rows.length === 0) throw new Error('CREDENCIALES_INVALIDAS')
 
   const user = result.rows[0]
-  console.log('User found:', user);
-  console.log('Password hash:', user.passwordhash);
-
   const passwordValida = await bcrypt.compare(password, user.passwordhash);
   if (!passwordValida) throw new Error('CREDENCIALES_INVALIDAS')
 

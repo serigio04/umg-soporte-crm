@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import DOMPurify from 'dompurify';
 import api from '../services/api';
 
 /**
@@ -45,10 +46,12 @@ function renderMarkdown(text) {
 function renderContent(text) {
   if (!text) return '';
   const hasHTML = /<[a-z][\s\S]*>/i.test(text);
-  if (hasHTML) {
-    return text;
-  }
-  return renderMarkdown(text);
+  const html = hasHTML ? text : renderMarkdown(text);
+
+  return DOMPurify.sanitize(html, {
+    USE_PROFILES: { html: true },
+    FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'button', 'textarea', 'select', 'template']
+  });
 }
 
 export default function PreguntasFrecuentes() {
@@ -59,12 +62,63 @@ export default function PreguntasFrecuentes() {
   const [activeCategorias, setActiveCategorias] = useState({});
   const [selectedArticulo, setSelectedArticulo] = useState(null);
   const [loadingDetalle, setLoadingDetalle] = useState(false);
+  const [detalleError, setDetalleError] = useState('');
+  const dialogRef = useRef(null);
+  const closeButtonRef = useRef(null);
+  const articleTriggerRef = useRef(null);
   const navigate = useNavigate();
 
   // Cargar artículos al montar
   useEffect(() => {
     fetchArticulos();
   }, []);
+
+  useEffect(() => {
+    if (!selectedArticulo) return undefined;
+
+    const dialog = dialogRef.current;
+    const trigger = articleTriggerRef.current;
+    const previousOverflow = document.body.style.overflow;
+
+    document.body.style.overflow = 'hidden';
+    closeButtonRef.current?.focus();
+
+    function handleDialogKeyDown(event) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setSelectedArticulo(null);
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+
+      const focusable = dialog?.querySelectorAll(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (!focusable?.length) {
+        event.preventDefault();
+        dialog?.focus();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener('keydown', handleDialogKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleDialogKeyDown);
+      document.body.style.overflow = previousOverflow;
+      trigger?.focus();
+    };
+  }, [selectedArticulo]);
 
   async function fetchArticulos(searchQuery = '') {
     setLoading(true);
@@ -103,8 +157,10 @@ export default function PreguntasFrecuentes() {
     }));
   }
 
-  async function handleOpenArticle(id) {
+  async function handleOpenArticle(id, trigger) {
+    articleTriggerRef.current = trigger;
     setLoadingDetalle(true);
+    setDetalleError('');
     try {
       const { data } = await api.get(`/conocimiento/${id}`);
       setSelectedArticulo(data);
@@ -126,7 +182,8 @@ export default function PreguntasFrecuentes() {
         })
       );
     } catch (err) {
-      alert('Error al abrir el artículo. Por favor, intenta de nuevo.');
+      console.error(err);
+      setDetalleError('Error al abrir el artículo. Por favor, intenta de nuevo.');
     } finally {
       setLoadingDetalle(false);
     }
@@ -143,7 +200,7 @@ export default function PreguntasFrecuentes() {
   const categorias = Object.keys(agrupados).sort();
 
   return (
-    <div style={styles.page}>
+    <div className="crm-page faq-page" style={styles.page}>
       <style>{`
         .kb-editor-content h1 {
           font-size: 22px;
@@ -180,36 +237,52 @@ export default function PreguntasFrecuentes() {
           margin: 6px 0;
           font-family: sans-serif;
         }
+        @media (max-width: 767px) {
+          .faq-search-form {
+            flex-direction: column;
+          }
+          .faq-search-form > button {
+            width: 100%;
+          }
+          .faq-accordion-button,
+          .faq-article-button {
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+          }
+        }
       `}</style>
       {/* Header */}
-      <div style={styles.header}>
-        <button style={styles.backBtn} onClick={() => navigate('/estudiante/dashboard')}>
+      <header className="crm-header faq-header" style={styles.header}>
+        <button type="button" className="touch-target" style={styles.backBtn} onClick={() => navigate('/estudiante/dashboard')}>
           ← Volver al Dashboard
         </button>
         <span style={styles.headerTitle}>Base de Conocimiento (FAQ)</span>
         <span style={{ width: 100 }} />
-      </div>
+      </header>
 
-      <div style={styles.container}>
+      <main id="contenido-principal" className="crm-section faq-content" style={styles.container} tabIndex="-1" aria-busy={loading}>
         {/* Buscador */}
-        <div style={styles.searchCard}>
-          <h2 style={styles.searchTitle}>¿Cómo podemos ayudarte hoy?</h2>
+        <section className="faq-search-card" style={styles.searchCard} aria-labelledby="faq-search-title">
+          <h2 id="faq-search-title" style={styles.searchTitle}>¿Cómo podemos ayudarte hoy?</h2>
           <p style={styles.searchSubtitle}>Encuentra respuestas rápidas sobre plataformas, matrículas, pagos y soporte técnico.</p>
-          <form onSubmit={handleSearchSubmit} style={styles.searchForm}>
+          <form className="faq-search-form" onSubmit={handleSearchSubmit} style={styles.searchForm} role="search">
+            <label className="visually-hidden" htmlFor="faq-search-input">Buscar en la base de conocimiento</label>
             <input
+              id="faq-search-input"
               type="text"
               style={styles.searchInput}
               placeholder="Buscar por título, palabra clave o categoría..."
               value={busqueda}
               onChange={e => setBusqueda(e.target.value)}
             />
-            <button type="submit" style={styles.searchBtn}>
-              🔍 Buscar
+            <button type="submit" className="touch-target" style={styles.searchBtn}>
+              <span aria-hidden="true">🔍</span> Buscar
             </button>
           </form>
           {busqueda && (
             <button 
               type="button" 
+              className="touch-target"
               style={styles.clearBtn} 
               onClick={() => {
                 setBusqueda('');
@@ -219,15 +292,21 @@ export default function PreguntasFrecuentes() {
               Ver todos los artículos
             </button>
           )}
-        </div>
+        </section>
 
         {/* Mensajes de Estado */}
-        {loading && <p style={styles.infoText}>Cargando preguntas frecuentes...</p>}
-        {error && <p style={styles.errorText}>{error}</p>}
+        {loading && <p role="status" aria-live="polite" style={styles.infoText}>Cargando preguntas frecuentes...</p>}
+        {error && <p role="alert" style={styles.errorText}>{error}</p>}
+        {detalleError && <p role="alert" style={styles.errorText}>{detalleError}</p>}
+        {!loading && !error && articulos.length > 0 && (
+          <p className="visually-hidden" role="status" aria-live="polite">
+            {articulos.length} {articulos.length === 1 ? 'artículo encontrado' : 'artículos encontrados'}.
+          </p>
+        )}
         
         {!loading && articulos.length === 0 && (
-          <div style={styles.emptyState}>
-            <span style={{ fontSize: '3rem' }}>🔍</span>
+          <div role="status" aria-live="polite" style={styles.emptyState}>
+            <span aria-hidden="true" style={{ fontSize: '3rem' }}>🔍</span>
             <h3 style={{ margin: '10px 0 5px', color: '#1a1a2e' }}>No se encontraron respuestas</h3>
             <p style={{ color: '#888', fontSize: '13px' }}>Prueba buscando con palabras clave diferentes o explora otra categoría.</p>
           </div>
@@ -235,73 +314,106 @@ export default function PreguntasFrecuentes() {
 
         {/* Lista de Categorías y Artículos */}
         {!loading && articulos.length > 0 && (
-          <div style={styles.accordionContainer}>
-            {categorias.map(cat => {
+          <div className="faq-accordion" style={styles.accordionContainer}>
+            {categorias.map((cat, categoryIndex) => {
               const arts = agrupados[cat];
               const isOpen = !!activeCategorias[cat];
+              const buttonId = `faq-category-${categoryIndex}`;
+              const panelId = `faq-panel-${categoryIndex}`;
               return (
                 <div key={cat} style={styles.categoryGroup}>
                   {/* Accordion Header */}
-                  <div 
+                  <button
+                    id={buttonId}
+                    type="button"
+                    className="touch-target faq-accordion-button"
                     style={{
                       ...styles.accordionHeader,
                       borderBottom: isOpen ? '1px solid #eef0f3' : 'none',
                       borderRadius: isOpen ? '12px 12px 0 0' : '12px'
                     }}
                     onClick={() => toggleCategoria(cat)}
+                    aria-expanded={isOpen}
+                    aria-controls={panelId}
                   >
-                    <div style={styles.categoryTitleContainer}>
-                      <span style={styles.categoryIcon}>📁</span>
+                    <span style={styles.categoryTitleContainer}>
+                      <span aria-hidden="true" style={styles.categoryIcon}>📁</span>
                       <span style={styles.categoryName}>{cat}</span>
                       <span style={styles.categoryCount}>({arts.length})</span>
-                    </div>
-                    <span style={styles.accordionArrow}>{isOpen ? '▲' : '▼'}</span>
-                  </div>
+                    </span>
+                    <span aria-hidden="true" style={styles.accordionArrow}>{isOpen ? '▲' : '▼'}</span>
+                  </button>
 
                   {/* Accordion Content */}
-                  {isOpen && (
-                    <div style={styles.accordionContent}>
+                    <div
+                      id={panelId}
+                      role="region"
+                      aria-labelledby={buttonId}
+                      hidden={!isOpen}
+                      style={styles.accordionContent}
+                    >
                       {arts.map(art => (
-                        <div 
+                        <button
                           key={art.idArticulo} 
+                          type="button"
+                          className="touch-target faq-article-button"
                           style={styles.articleItem}
-                          onClick={() => handleOpenArticle(art.idArticulo)}
+                          onClick={event => handleOpenArticle(art.idArticulo, event.currentTarget)}
+                          disabled={loadingDetalle}
                         >
-                          <div style={styles.articleLeft}>
+                          <span style={styles.articleLeft}>
                             <span style={styles.articleTitle}>{art.titulo}</span>
-                            <div style={styles.articleMeta}>
-                              <span style={styles.metaLabel}>👁️ {art.vistas ?? art.views ?? art.total_vistas ?? art.visitas ?? 0} vistas</span>
-                              <span style={styles.metaDot}>•</span>
+                            <span style={styles.articleMeta}>
+                              <span style={styles.metaLabel}><span aria-hidden="true">👁️</span> {art.vistas ?? art.views ?? art.total_vistas ?? art.visitas ?? 0} vistas</span>
+                              <span aria-hidden="true" style={styles.metaDot}>•</span>
                               <span style={styles.metaLabel}>ID: #{art.idArticulo}</span>
-                            </div>
-                          </div>
-                          <span style={styles.articleArrow}>→</span>
-                        </div>
+                            </span>
+                          </span>
+                          <span aria-hidden="true" style={styles.articleArrow}>→</span>
+                        </button>
                       ))}
                     </div>
-                  )}
                 </div>
               );
             })}
           </div>
         )}
-      </div>
+      </main>
 
       {/* Modal de Detalle de Artículo */}
       {selectedArticulo && (
         <div style={styles.modalOverlay} onClick={() => setSelectedArticulo(null)}>
-          <div style={styles.modalCard} onClick={e => e.stopPropagation()}>
+          <div
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="faq-dialog-title"
+            aria-describedby="faq-dialog-content"
+            tabIndex="-1"
+            style={styles.modalCard}
+            onClick={e => e.stopPropagation()}
+          >
             <div style={styles.modalHeader}>
               <div>
                 <span style={styles.modalCategoryBadge}>{selectedArticulo.categoria || 'General'}</span>
-                <h3 style={styles.modalTitle}>{selectedArticulo.titulo}</h3>
-                <p style={styles.modalViews}>👁️ {selectedArticulo.vistas ?? selectedArticulo.views ?? selectedArticulo.total_vistas ?? selectedArticulo.visitas ?? 0} visualizaciones</p>
+                <h3 id="faq-dialog-title" style={styles.modalTitle}>{selectedArticulo.titulo}</h3>
+                <p style={styles.modalViews}><span aria-hidden="true">👁️</span> {selectedArticulo.vistas ?? selectedArticulo.views ?? selectedArticulo.total_vistas ?? selectedArticulo.visitas ?? 0} visualizaciones</p>
               </div>
-              <button style={styles.closeBtn} onClick={() => setSelectedArticulo(null)}>✕</button>
+              <button
+                ref={closeButtonRef}
+                type="button"
+                className="touch-target"
+                style={styles.closeBtn}
+                aria-label="Cerrar artículo"
+                onClick={() => setSelectedArticulo(null)}
+              >
+                <span aria-hidden="true">✕</span>
+              </button>
             </div>
             
             <div style={styles.modalBody}>
               <div 
+                id="faq-dialog-content"
                 className="kb-editor-content"
                 style={styles.articleBodyContent}
                 dangerouslySetInnerHTML={{ __html: renderContent(selectedArticulo.contenidoMarkdown || selectedArticulo.contenido) }}
@@ -309,7 +421,7 @@ export default function PreguntasFrecuentes() {
             </div>
             
             <div style={styles.modalFooter}>
-              <button style={styles.closeFooterBtn} onClick={() => setSelectedArticulo(null)}>
+              <button type="button" className="touch-target" style={styles.closeFooterBtn} onClick={() => setSelectedArticulo(null)}>
                 Entendido
               </button>
             </div>
@@ -319,7 +431,7 @@ export default function PreguntasFrecuentes() {
 
       {/* Loader de Detalle Overlay */}
       {loadingDetalle && (
-        <div style={styles.modalOverlay}>
+        <div role="status" aria-live="assertive" aria-busy="true" style={styles.modalOverlay}>
           <div style={styles.loaderContainer}>
             <p style={{ color: '#fff', fontSize: '15px', fontWeight: '500' }}>Cargando artículo...</p>
           </div>
@@ -450,12 +562,15 @@ const styles = {
     overflow: 'hidden'
   },
   accordionHeader: { 
+    width: '100%',
     padding: '1.25rem 1.5rem', 
     display: 'flex', 
     justifyContent: 'space-between', 
     alignItems: 'center', 
     cursor: 'pointer',
     background: '#fff',
+    border: 'none',
+    textAlign: 'left',
     userSelect: 'none',
     transition: 'background 0.2s'
   },
@@ -486,11 +601,15 @@ const styles = {
     borderTop: '1px solid #f1f3f5'
   },
   articleItem: { 
+    width: '100%',
     padding: '12px 0', 
+    background: 'transparent',
+    border: 'none',
     borderBottom: '1px solid #f1f3f5', 
     display: 'flex', 
     justifyContent: 'space-between', 
     alignItems: 'center', 
+    textAlign: 'left',
     cursor: 'pointer',
     transition: 'padding-left 0.2s'
   },

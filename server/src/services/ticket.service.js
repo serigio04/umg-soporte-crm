@@ -1,10 +1,11 @@
 const { pool } = require('../config/db');
 const surveyService = require('./survey.service');
+const { emitirTicket, refrescarAccesosTicket } = require('../realtime');
 
 
 const validarEntero = (valor, nombre) => {
   const entero = Number(valor)
-  if (!Number.isInteger(entero) || Number.isNaN(entero)) {
+  if (!Number.isInteger(entero) || entero <= 0) {
     throw new Error(`${nombre}_INVALIDO`)
   }
   return entero
@@ -40,30 +41,59 @@ const crearTicket = async ({ tipologiaITIL, descripcion, carnetEstudiante, idUsu
       idEstudiante = est.rows[0].idestudiante
     }
 
-    console.log('idEstudiante resuelto:', idEstudiante)
-
-    // Buscar el agente asignado según la tipología (por correo institucional)
-    const correoMap = {
-      'Incidente': 'incidentes@miumg.edu.gt',
-      'Solicitud':  'solicitudes@miumg.edu.gt',
-      'Cambio':     'cambios@miumg.edu.gt'
+    let idAgente = null
+    if (rol === 'Agente') {
+      const agente = await client.query(
+        `SELECT a.idagente FROM agentes a
+         JOIN usuarios u ON u.idusuario = a.idusuario
+         WHERE a.idusuario = $1 AND u.rol = 'Agente' LIMIT 1`,
+        [idUsuario]
+      )
+      if (agente.rows.length === 0) throw new Error('AGENTE_NO_ENCONTRADO')
+      idAgente = agente.rows[0].idagente
+    } else {
+      await client.query(
+        `INSERT INTO asignacion_cursor (especialidad) VALUES ($1)
+         ON CONFLICT (especialidad) DO NOTHING`,
+        [tipologiaITIL]
+      )
+      const cursor = await client.query(
+        `SELECT ultimoidagente FROM asignacion_cursor
+         WHERE especialidad = $1 FOR UPDATE`,
+        [tipologiaITIL]
+      )
+      const agente = await client.query(
+        `SELECT a.idagente
+         FROM agentes a
+         JOIN usuarios u ON u.idusuario = a.idusuario
+         WHERE a.especialidad = $1 AND u.rol = 'Agente'
+         ORDER BY (a.idagente > COALESCE($2, 0)) DESC, a.idagente
+         LIMIT 1`,
+        [tipologiaITIL, cursor.rows[0].ultimoidagente]
+      )
+      if (agente.rows.length > 0) {
+        idAgente = agente.rows[0].idagente
+        await client.query(
+          `UPDATE asignacion_cursor
+           SET ultimoidagente = $2, fechaactualizacion = NOW()
+           WHERE especialidad = $1`,
+          [tipologiaITIL, idAgente]
+        )
+      }
     }
-    const agente = await client.query(
-      `SELECT a.idagente
-       FROM agentes a
-       JOIN usuarios u ON a.idusuario = u.idusuario
-       WHERE u.correoinstitucional = $1 LIMIT 1`,
-      [correoMap[tipologiaITIL]]
-    )
-    const idAgente = agente.rows.length > 0 ? agente.rows[0].idagente : null
-    console.log('idAgente asignado:', idAgente)
 
     // Insertar el ticket
     const ticketResult = await client.query(
-      `INSERT INTO tickets (fechacreacion, prioridadsla, tipologiaitil, estado, idestudiante, descripcion, idagente)
-       VALUES (NOW(), $1, $2, 'Abierto', $3, $4, $5)
-       RETURNING idticket`,
-      [prioridad, tipologiaITIL, idEstudiante, descripcion, idAgente]
+      `INSERT INTO tickets
+         (fechacreacion, fechalimitesla, prioridadsla, tipologiaitil, estado,
+          idestudiante, descripcion, idagente, idusuariocreador)
+       VALUES (NOW(), NOW() + CASE $1
+                 WHEN 'Alta' THEN INTERVAL '4 hours'
+                 WHEN 'Media' THEN INTERVAL '24 hours'
+                 ELSE INTERVAL '48 hours' END,
+               $1, $2, 'Abierto', $3, $4, $5, $6)
+       RETURNING idticket, fechalimitesla, version`,
+      [prioridad, tipologiaITIL, idEstudiante, descripcion, idAgente, idUsuario]
     )
     const idTicket = ticketResult.rows[0].idticket
 
@@ -74,9 +104,28 @@ const crearTicket = async ({ tipologiaITIL, descripcion, carnetEstudiante, idUsu
       [idTicket]
     )
 
+    await registrarEvento(client, idTicket, 'ticket.creado', idUsuario, ticketResult.rows[0].version, {
+      idAgente,
+      prioridadSLA: prioridad
+    })
+
     await client.query('COMMIT')
+    emitirTicket(idTicket, 'ticket:updated', {
+      idTicket,
+      tipo: 'ticket.creado',
+      version: ticketResult.rows[0].version
+    })
     console.log(`Ticket ${idTicket} creado. Agente: ${idAgente ?? 'ninguno'}`)
-    return { idTicket, tipologiaITIL, descripcion, prioridadSLA: prioridad, estado: 'Abierto', idAgente }
+    return {
+      idTicket,
+      tipologiaITIL,
+      descripcion,
+      prioridadSLA: prioridad,
+      fechaLimiteSLA: ticketResult.rows[0].fechalimitesla,
+      estado: 'Abierto',
+      idAgente,
+      version: ticketResult.rows[0].version
+    }
 
   } catch (err) {
     await client.query('ROLLBACK')
@@ -149,16 +198,28 @@ const obtenerUltimoTicket = async (idUsuario) => {
 }
 
 // ─── obtenerDetalleTicket ────────────────────────────────────────────────────
-const obtenerDetalleTicket = async (idTicket) => {
+const obtenerDetalleTicket = async (idTicket, idUsuario, rol) => {
   const idTicketInt = validarEntero(idTicket, 'ID_TICKET')
   const ticketRes = await pool.query(
-    `SELECT t.idticket, t.fechacreacion, t.prioridadsla, t.tipologiaitil, t.estado, t.descripcion, t.idestudiante, t.idagente,
-            e.carne, u.nombrecompleto as nombreestudiante
+    `SELECT t.idticket, t.fechacreacion, t.fechalimitesla, t.prioridadsla, t.tipologiaitil,
+            t.estado, t.descripcion, t.idestudiante, t.idagente, t.idusuariocreador, t.version,
+            e.carne, u.nombrecompleto as nombreestudiante,
+            ua.nombrecompleto as nombreagente
      FROM tickets t
      LEFT JOIN estudiante e ON t.idestudiante = e.idestudiante
      LEFT JOIN usuarios u ON e.idusuario = u.idusuario
-     WHERE t.idticket = $1`,
-    [idTicketInt]
+     LEFT JOIN agentes aa ON aa.idagente = t.idagente
+     LEFT JOIN usuarios ua ON ua.idusuario = aa.idusuario
+     WHERE t.idticket = $1
+       AND (
+         $3 = 'Coordinador'
+         OR ($3 = 'Estudiante' AND e.idusuario = $2)
+         OR ($3 = 'Agente' AND EXISTS (
+           SELECT 1 FROM agentes a
+           WHERE a.idagente = t.idagente AND a.idusuario = $2
+         ))
+       )`,
+    [idTicketInt, idUsuario, rol]
   )
 
   if (ticketRes.rows.length === 0) throw new Error('TICKET_NO_ENCONTRADO')
@@ -172,27 +233,10 @@ const obtenerDetalleTicket = async (idTicket) => {
     [idTicketInt]
   )
 
-  const horasLimite = t.prioridadsla === 'Alta' ? 4
-    : t.prioridadsla === 'Media' ? 24 : 48
-  const fechaCreacion = new Date(t.fechacreacion)
-  const fechaLimite = new Date(fechaCreacion.getTime() + horasLimite * 60 * 60 * 1000)
+  const fechaLimite = new Date(t.fechalimitesla)
   const ahora = new Date()
   const horasRestantes = Math.max(0, Math.round((fechaLimite - ahora) / (1000 * 60 * 60) * 10) / 10)
   const vencido = ahora > fechaLimite
-
-  console.log('Detalle del ticket:', {
-    idTicket: t.idticket,
-    fechaCreacion: t.fechacreacion,
-    prioridadSLA: t.prioridadsla,
-    tipologiaITIL: t.tipologiaitil,
-    estado: t.estado,
-    descripcion: t.descripcion,
-    idEstudiante: t.idestudiante,
-    idAgente: t.idagente,
-    horasRestantes,
-    vencido,
-    historial: historial.rows
-  })
 
   return {
     idTicket: t.idticket,
@@ -205,6 +249,10 @@ const obtenerDetalleTicket = async (idTicket) => {
     carneEstudiante: t.carne,
     nombreEstudiante: t.nombreestudiante,
     idAgente: t.idagente,
+    nombreAgente: t.nombreagente,
+    idUsuarioCreador: t.idusuariocreador,
+    fechaLimiteSLA: t.fechalimitesla,
+    version: t.version,
     horasRestantes,
     vencido,
     historial: historial.rows.map(h => ({
@@ -216,10 +264,18 @@ const obtenerDetalleTicket = async (idTicket) => {
 }
 
 // ─── cambiarEstadoTicket ─────────────────────────────────────────────────────
-const cambiarEstadoTicket = async (idTicket, nuevoEstado, comentario, idEstudiante = null) => {
+const cambiarEstadoTicket = async (idTicket, nuevoEstado, comentario, idUsuario, rol) => {
   const idTicketInt = validarEntero(idTicket, 'ID_TICKET');
   const estadosValidos = ['Abierto', 'EnProceso', 'Pendiente', 'Resuelto', 'Cerrado'];
   if (!estadosValidos.includes(nuevoEstado)) throw new Error('ESTADO_INVALIDO');
+
+  const transicionesValidas = {
+    Abierto: ['EnProceso'],
+    EnProceso: ['Pendiente'],
+    Pendiente: ['Resuelto'],
+    Resuelto: [],
+    Cerrado: []
+  };
 
   const client = await pool.connect()
   try {
@@ -227,23 +283,38 @@ const cambiarEstadoTicket = async (idTicket, nuevoEstado, comentario, idEstudian
 
     await client.query('BEGIN');
 
-    await client.query(
-      `UPDATE tickets SET estado = $1 WHERE idticket = $2`,
+    const ticketRes = await client.query(
+      `SELECT t.estado, t.idestudiante
+       FROM tickets t
+       WHERE t.idticket = $1
+         AND (
+           $3 = 'Coordinador'
+           OR ($3 = 'Agente' AND EXISTS (
+             SELECT 1 FROM agentes a
+             WHERE a.idagente = t.idagente AND a.idusuario = $2
+           ))
+         )
+       FOR UPDATE`,
+      [idTicketInt, idUsuario, rol]
+    );
+
+    if (ticketRes.rows.length === 0) throw new Error('TICKET_NO_ENCONTRADO');
+
+    const { estado: estadoActual, idestudiante: idEstudiante } = ticketRes.rows[0];
+    if (!transicionesValidas[estadoActual]?.includes(nuevoEstado)) {
+      throw new Error('TRANSICION_ESTADO_INVALIDA');
+    }
+
+    const actualizado = await client.query(
+      `UPDATE tickets SET estado = $1, version = version + 1 WHERE idticket = $2
+       RETURNING version`,
       [nuevoEstado, idTicketInt]
     );
 
     console.log(`Estado del ticket ${idTicketInt} actualizado a ${nuevoEstado}`);
 
-    if (nuevoEstado === 'Resuelto' || nuevoEstado === 'Cerrado') {
-      if (!idEstudiante) {
-        const tRes = await client.query(
-          `SELECT idestudiante FROM tickets WHERE idticket = $1 LIMIT 1`,
-          [idTicketInt]
-        );
-        if (tRes.rows.length === 0) throw new Error('TICKET_NO_ENCONTRADO');
-        idEstudiante = tRes.rows[0].idestudiante;
-      }
-      await surveyService.crearEncuesta(idTicketInt, idEstudiante);
+    if (nuevoEstado === 'Resuelto') {
+      await surveyService.crearEncuesta(idTicketInt, idEstudiante, client);
     };
 
     await client.query(
@@ -252,11 +323,24 @@ const cambiarEstadoTicket = async (idTicket, nuevoEstado, comentario, idEstudian
       [nuevoEstado, comentario, idTicketInt]
     );
 
+    await registrarEvento(client, idTicketInt, 'estado.cambiado', idUsuario, actualizado.rows[0].version, {
+      estadoAnterior: estadoActual,
+      nuevoEstado,
+      comentario
+    });
+
     await client.query('COMMIT');
+    await refrescarAccesosTicket(idTicketInt);
+    emitirTicket(idTicketInt, 'ticket:updated', {
+      idTicket: idTicketInt,
+      tipo: 'estado.cambiado',
+      nuevoEstado,
+      version: actualizado.rows[0].version
+    });
     
     console.log(`Historial del ticket ${idTicketInt} actualizado`);
     
-    return { idTicket: idTicketInt, nuevoEstado };
+    return { idTicket: idTicketInt, nuevoEstado, version: actualizado.rows[0].version };
   } catch (err) {
     await client.query('ROLLBACK');
     console.error(`Error al cambiar el estado del ticket ${idTicketInt}:`, err, 'Realizando ROLLBACK');
@@ -310,12 +394,26 @@ const obtenerTicketsAbiertos = async () => {
 };
 
 // ─── escalarTicket ─────────────────────────────────────────────────────────────
-const escalarTicket = async (idTicket) => {
+const escalarTicket = async (idTicket, idUsuario) => {
   const idTicketInt = validarEntero(idTicket, 'ID_TICKET');
   const client = await pool.connect();
 
   try {
     await client.query('BEGIN');
+
+    const ticketRes = await client.query(
+      `SELECT t.estado
+       FROM tickets t
+       JOIN agentes a ON a.idagente = t.idagente
+       WHERE t.idticket = $1 AND a.idusuario = $2
+       FOR UPDATE OF t`,
+      [idTicketInt, idUsuario]
+    );
+
+    if (ticketRes.rows.length === 0) throw new Error('TICKET_NO_ENCONTRADO');
+    if (['Resuelto', 'Cerrado'].includes(ticketRes.rows[0].estado)) {
+      throw new Error('TRANSICION_ESTADO_INVALIDA');
+    }
 
     // Buscar ID del coordinador
     const coordRes = await client.query(
@@ -330,8 +428,10 @@ const escalarTicket = async (idTicket) => {
     const idCoordinador = coordRes.rows[0].idagente;
 
     // Actualizar ticket: asignar a coordinador y pasar a Abierto si no lo estaba
-    await client.query(
-      `UPDATE tickets SET idagente = $1, estado = 'Abierto' WHERE idticket = $2`,
+    const actualizado = await client.query(
+      `UPDATE tickets
+       SET idagente = $1, estado = 'Abierto', version = version + 1
+       WHERE idticket = $2 RETURNING version`,
       [idCoordinador, idTicketInt]
     );
 
@@ -342,8 +442,19 @@ const escalarTicket = async (idTicket) => {
       [idTicketInt]
     );
 
+    await registrarEvento(client, idTicketInt, 'ticket.escalado', idUsuario, actualizado.rows[0].version, {
+      idAgente: idCoordinador
+    });
+
     await client.query('COMMIT');
-    return { idTicket: idTicketInt, idCoordinador };
+    await refrescarAccesosTicket(idTicketInt);
+    emitirTicket(idTicketInt, 'ticket:updated', {
+      idTicket: idTicketInt,
+      tipo: 'ticket.escalado',
+      idAgente: idCoordinador,
+      version: actualizado.rows[0].version
+    });
+    return { idTicket: idTicketInt, idCoordinador, version: actualizado.rows[0].version };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -356,29 +467,44 @@ const escalarTicket = async (idTicket) => {
 const aceptarResolucion = async (idTicket, idUsuario) => {
   const idTicketInt = validarEntero(idTicket, 'ID_TICKET');
 
-  // Verificar que el ticket pertenece a este estudiante y está en Resuelto
-  const ticketRes = await pool.query(
-    `SELECT t.idticket, t.estado
-     FROM tickets t
-     JOIN estudiante e ON t.idestudiante = e.idestudiante
-     WHERE t.idticket = $1 AND e.idusuario = $2`,
-    [idTicketInt, idUsuario]
-  );
-
-  if (ticketRes.rows.length === 0) throw new Error('TICKET_NO_ENCONTRADO');
-  if (ticketRes.rows[0].estado !== 'Resuelto') throw new Error('TICKET_NO_RESUELTO');
-
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query(`UPDATE tickets SET estado = 'Cerrado' WHERE idticket = $1`, [idTicketInt]);
+
+    const ticketRes = await client.query(
+      `SELECT t.estado
+       FROM tickets t
+       JOIN estudiante e ON t.idestudiante = e.idestudiante
+       WHERE t.idticket = $1 AND e.idusuario = $2
+       FOR UPDATE OF t`,
+      [idTicketInt, idUsuario]
+    );
+
+    if (ticketRes.rows.length === 0) throw new Error('TICKET_NO_ENCONTRADO');
+    if (ticketRes.rows[0].estado !== 'Resuelto') throw new Error('TICKET_NO_RESUELTO');
+
+    const actualizado = await client.query(
+      `UPDATE tickets SET estado = 'Cerrado', version = version + 1
+       WHERE idticket = $1 RETURNING version`,
+      [idTicketInt]
+    );
     await client.query(
       `INSERT INTO estadosticket (nombreestado, fechacambio, comentariotecnico, idticket)
        VALUES ('Cerrado', NOW(), 'Resolución aceptada por el estudiante', $1)`,
       [idTicketInt]
     );
+    await registrarEvento(client, idTicketInt, 'estado.cambiado', idUsuario, actualizado.rows[0].version, {
+      estadoAnterior: 'Resuelto',
+      nuevoEstado: 'Cerrado'
+    });
     await client.query('COMMIT');
-    return { idTicket: idTicketInt, estado: 'Cerrado' };
+    emitirTicket(idTicketInt, 'ticket:updated', {
+      idTicket: idTicketInt,
+      tipo: 'estado.cambiado',
+      nuevoEstado: 'Cerrado',
+      version: actualizado.rows[0].version
+    });
+    return { idTicket: idTicketInt, estado: 'Cerrado', version: actualizado.rows[0].version };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -386,6 +512,153 @@ const aceptarResolucion = async (idTicket, idUsuario) => {
     client.release();
   }
 };
+
+const actualizarPrioridad = async (idTicket, prioridad, idUsuario, rol) => {
+  const idTicketInt = validarEntero(idTicket, 'ID_TICKET')
+  if (!['Alta', 'Media', 'Baja'].includes(prioridad)) throw new Error('PRIORIDAD_INVALIDA')
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const ticket = await client.query(
+      `SELECT t.estado, t.prioridadsla
+       FROM tickets t
+       WHERE t.idticket = $1
+         AND ($3 = 'Coordinador' OR ($3 = 'Agente' AND EXISTS (
+           SELECT 1 FROM agentes a WHERE a.idagente = t.idagente AND a.idusuario = $2
+         )))
+       FOR UPDATE`,
+      [idTicketInt, idUsuario, rol]
+    )
+    if (ticket.rows.length === 0) throw new Error('TICKET_NO_ENCONTRADO')
+    if (['Resuelto', 'Cerrado'].includes(ticket.rows[0].estado)) throw new Error('TICKET_FINALIZADO')
+
+    const actualizado = await client.query(
+      `UPDATE tickets
+       SET prioridadsla = $1,
+           fechalimitesla = NOW() + CASE $1
+             WHEN 'Alta' THEN INTERVAL '4 hours'
+             WHEN 'Media' THEN INTERVAL '24 hours'
+             ELSE INTERVAL '48 hours' END,
+           version = version + 1
+       WHERE idticket = $2
+       RETURNING prioridadsla, fechalimitesla, version`,
+      [prioridad, idTicketInt]
+    )
+    await registrarEvento(client, idTicketInt, 'prioridad.cambiada', idUsuario, actualizado.rows[0].version, {
+      prioridadAnterior: ticket.rows[0].prioridadsla,
+      prioridadSLA: prioridad,
+      fechaLimiteSLA: actualizado.rows[0].fechalimitesla
+    })
+    await client.query('COMMIT')
+
+    const resultado = {
+      idTicket: idTicketInt,
+      prioridadSLA: actualizado.rows[0].prioridadsla,
+      fechaLimiteSLA: actualizado.rows[0].fechalimitesla,
+      version: actualizado.rows[0].version
+    }
+    emitirTicket(idTicketInt, 'ticket:updated', { ...resultado, tipo: 'prioridad.cambiada' })
+    return resultado
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
+const obtenerCandidatos = async (idTicket, idUsuario, rol) => {
+  const idTicketInt = validarEntero(idTicket, 'ID_TICKET')
+  const ticket = await pool.query(
+    `SELECT t.tipologiaitil, t.estado
+     FROM tickets t
+     WHERE t.idticket = $1
+       AND ($3 = 'Coordinador' OR ($3 = 'Agente' AND EXISTS (
+         SELECT 1 FROM agentes actual
+         WHERE actual.idagente = t.idagente AND actual.idusuario = $2
+       )))`,
+    [idTicketInt, idUsuario, rol]
+  )
+  if (ticket.rows.length === 0) throw new Error('TICKET_NO_ENCONTRADO')
+  if (['Resuelto', 'Cerrado'].includes(ticket.rows[0].estado)) throw new Error('TICKET_FINALIZADO')
+
+  const agentes = await pool.query(
+    `SELECT a.idagente, a.especialidad, a.sedeasignada,
+            u.nombrecompleto, u.correoinstitucional
+     FROM agentes a
+     JOIN usuarios u ON u.idusuario = a.idusuario
+       WHERE a.especialidad = $1 AND u.rol = 'Agente'
+     ORDER BY u.nombrecompleto, a.idagente`,
+    [ticket.rows[0].tipologiaitil]
+  )
+  return agentes.rows.map(row => ({
+    idAgente: row.idagente,
+    nombreCompleto: row.nombrecompleto,
+    correoInstitucional: row.correoinstitucional,
+    especialidad: row.especialidad,
+    sedeAsignada: row.sedeasignada
+  }))
+}
+
+const reasignar = async (idTicket, idAgente, idUsuario, rol) => {
+  const idTicketInt = validarEntero(idTicket, 'ID_TICKET')
+  const idAgenteInt = validarEntero(idAgente, 'ID_AGENTE')
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const ticket = await client.query(
+      `SELECT t.estado, t.tipologiaitil, t.idagente
+       FROM tickets t
+       WHERE t.idticket = $1
+         AND ($3 = 'Coordinador' OR ($3 = 'Agente' AND EXISTS (
+           SELECT 1 FROM agentes actual
+           WHERE actual.idagente = t.idagente AND actual.idusuario = $2
+         )))
+       FOR UPDATE`,
+      [idTicketInt, idUsuario, rol]
+    )
+    if (ticket.rows.length === 0) throw new Error('TICKET_NO_ENCONTRADO')
+    if (['Resuelto', 'Cerrado'].includes(ticket.rows[0].estado)) throw new Error('TICKET_FINALIZADO')
+
+    const candidato = await client.query(
+      `SELECT a.idagente
+       FROM agentes a
+       JOIN usuarios u ON u.idusuario = a.idusuario
+       WHERE a.idagente = $1 AND a.especialidad = $2 AND u.rol = 'Agente'`,
+      [idAgenteInt, ticket.rows[0].tipologiaitil]
+    )
+    if (candidato.rows.length === 0) throw new Error('AGENTE_INCOMPATIBLE')
+
+    const actualizado = await client.query(
+      `UPDATE tickets SET idagente = $1, version = version + 1
+       WHERE idticket = $2 RETURNING version`,
+      [idAgenteInt, idTicketInt]
+    )
+    await registrarEvento(client, idTicketInt, 'asignacion.cambiada', idUsuario, actualizado.rows[0].version, {
+      idAgenteAnterior: ticket.rows[0].idagente,
+      idAgente: idAgenteInt
+    })
+    await client.query('COMMIT')
+    await refrescarAccesosTicket(idTicketInt)
+
+    const resultado = { idTicket: idTicketInt, idAgente: idAgenteInt, version: actualizado.rows[0].version }
+    emitirTicket(idTicketInt, 'ticket:updated', { ...resultado, tipo: 'asignacion.cambiada' })
+    return resultado
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
+const registrarEvento = async (client, idTicket, tipo, idUsuario, version, datos) => {
+  await client.query(
+    `INSERT INTO eventos_ticket (idticket, tipo, idusuario, versionticket, datos)
+     VALUES ($1, $2, $3, $4, $5::jsonb)`,
+    [idTicket, tipo, idUsuario, version, JSON.stringify(datos)]
+  )
+}
 
 module.exports = { 
   crearTicket, 
@@ -396,5 +669,8 @@ module.exports = {
   obtenerHistorialTicketsAgente, 
   escalarTicket, 
   aceptarResolucion,
-  obtenerTicketsAbiertos
+  obtenerTicketsAbiertos,
+  actualizarPrioridad,
+  obtenerCandidatos,
+  reasignar
 }

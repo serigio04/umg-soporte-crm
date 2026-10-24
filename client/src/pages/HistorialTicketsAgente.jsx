@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import Pagination from '../components/molecules/Pagination';
+
+const PAGE_SIZE = 15;
 
 const COLOR_PRIORIDAD = {
   'Alta': '#e74c3c',
@@ -20,11 +23,15 @@ export default function HistorialTicketsAgente() {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filtro, setFiltro] = useState('Todos');
+  const [pagina, setPagina] = useState(1);
   const navigate = useNavigate();
 
   useEffect(() => {
     api.get('/tickets/historial/agente')
-      .then(r => setTickets(r.data))
+      .then(r => {
+        setTickets(r.data)
+        setPagina(1)
+      })
       .catch(() => setTickets([]))
       .finally(() => setLoading(false))
   }, []);
@@ -32,6 +39,14 @@ export default function HistorialTicketsAgente() {
   const ticketsFiltrados = filtro === 'Todos'
     ? tickets
     : tickets.filter(t => t.estado === filtro);
+  const totalPaginas = Math.max(1, Math.ceil(ticketsFiltrados.length / PAGE_SIZE));
+  const paginaActual = Math.min(pagina, totalPaginas);
+  const ticketsPaginados = ticketsFiltrados.slice((paginaActual - 1) * PAGE_SIZE, paginaActual * PAGE_SIZE);
+
+  function cambiarFiltro(nuevoFiltro) {
+    setFiltro(nuevoFiltro)
+    setPagina(1)
+  }
 
   return (
     <div style={styles.page}>
@@ -41,17 +56,17 @@ export default function HistorialTicketsAgente() {
         <span />
       </div>
 
-      <div style={styles.container}>
+      <main id="contenido-principal" style={styles.container}>
         <p style={styles.contador}>
           {loading ? 'Cargando...' : `${ticketsFiltrados.length} ticket${ticketsFiltrados.length !== 1 ? 's' : ''}`}
         </p>
 
         <div style={styles.filtro}>
-          <button style={{ ...styles.filtroBtn, ...(filtro === 'Todos' ? styles.filtroBtnActive : {}) }} onClick={() => setFiltro('Todos')}>Todos</button>
-          <button style={{ ...styles.filtroBtn, ...(filtro === 'EnProceso' ? styles.filtroBtnActive : {}) }} onClick={() => setFiltro('EnProceso')}>En Proceso</button>
-          <button style={{ ...styles.filtroBtn, ...(filtro === 'Pendiente' ? styles.filtroBtnActive : {}) }} onClick={() => setFiltro('Pendiente')}>Pendiente</button>
-          <button style={{ ...styles.filtroBtn, ...(filtro === 'Resuelto' ? styles.filtroBtnActive : {}) }} onClick={() => setFiltro('Resuelto')}>Resuelto</button>
-          <button style={{ ...styles.filtroBtn, ...(filtro === 'Cerrado' ? styles.filtroBtnActive : {}) }} onClick={() => setFiltro('Cerrado')}>Cerrado</button>
+          <button style={{ ...styles.filtroBtn, ...(filtro === 'Todos' ? styles.filtroBtnActive : {}) }} onClick={() => cambiarFiltro('Todos')}>Todos</button>
+          <button style={{ ...styles.filtroBtn, ...(filtro === 'EnProceso' ? styles.filtroBtnActive : {}) }} onClick={() => cambiarFiltro('EnProceso')}>En Proceso</button>
+          <button style={{ ...styles.filtroBtn, ...(filtro === 'Pendiente' ? styles.filtroBtnActive : {}) }} onClick={() => cambiarFiltro('Pendiente')}>Pendiente</button>
+          <button style={{ ...styles.filtroBtn, ...(filtro === 'Resuelto' ? styles.filtroBtnActive : {}) }} onClick={() => cambiarFiltro('Resuelto')}>Resuelto</button>
+          <button style={{ ...styles.filtroBtn, ...(filtro === 'Cerrado' ? styles.filtroBtnActive : {}) }} onClick={() => cambiarFiltro('Cerrado')}>Cerrado</button>
         </div>
 
         {!loading && ticketsFiltrados.length === 0 && (
@@ -59,7 +74,7 @@ export default function HistorialTicketsAgente() {
         )}
 
         <div style={styles.lista}>
-          {ticketsFiltrados.map(t => (
+          {ticketsPaginados.map(t => (
             <div key={t.idTicket} style={styles.card}>
               <div style={styles.cardTop}>
                 <span style={styles.ticketId}>Ticket #{t.idTicket}</span>
@@ -89,7 +104,16 @@ export default function HistorialTicketsAgente() {
             </div>
           ))}
         </div>
-      </div>
+        {!loading && (
+          <Pagination
+            currentPage={paginaActual}
+            totalItems={ticketsFiltrados.length}
+            pageSize={PAGE_SIZE}
+            onPageChange={setPagina}
+            ariaLabel="Paginación del historial de tickets"
+          />
+        )}
+      </main>
     </div>
   )
 }

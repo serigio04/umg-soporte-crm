@@ -1,5 +1,11 @@
 const { pool } = require('../config/db')
 
+const validarIdAgente = idAgente => {
+  const id = Number(idAgente)
+  if (!Number.isInteger(id) || id <= 0) throw new Error('ID_AGENTE_INVALIDO')
+  return id
+}
+
 // ─── obtenerPerfilAgente ──────────────────────────────────────────────────────
 const obtenerPerfilAgente = async (idUsuario) => {
   const result = await pool.query(
@@ -27,6 +33,7 @@ const obtenerPerfilAgente = async (idUsuario) => {
 
 // ─── obtenerTicketPrioridad ───────────────────────────────────────────────────
 const obtenerTicketPrioridad = async (idAgente) => {
+  const id = validarIdAgente(idAgente)
   const result = await pool.query(
     `SELECT t.idticket, t.fechacreacion, t.prioridadsla, t.tipologiaitil, t.estado, t.descripcion, t.idestudiante, e.idestudiante, e.carne
       FROM tickets t
@@ -41,7 +48,7 @@ const obtenerTicketPrioridad = async (idAgente) => {
        END ASC,
        t.fechacreacion ASC
      LIMIT 1`,
-    [idAgente]
+    [id]
   );
 
   console.log('Ticket de prioridad encontrado:', result.rows);
@@ -62,12 +69,13 @@ const obtenerTicketPrioridad = async (idAgente) => {
 
 // ─── obtenerTicketsAsignados ──────────────────────────────────────────────────
 const obtenerTicketsAsignados = async (idAgente) => {
+  const id = validarIdAgente(idAgente)
   const result = await pool.query(
     `SELECT idticket, fechacreacion, prioridadsla, tipologiaitil, estado, descripcion
      FROM tickets
      WHERE idagente = $1
      ORDER BY fechacreacion DESC`,
-    [idAgente]
+    [id]
   )
 
   return result.rows.map(r => ({

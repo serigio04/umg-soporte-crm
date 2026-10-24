@@ -1,46 +1,73 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import CambiarPassword from '../components/CambiarPassword'
+import Pagination from '../components/molecules/Pagination'
 
-const COLOR_PRIORIDAD = {
-  'Alta':  '#e74c3c',
-  'Media': '#e67e22',
-  'Baja':  '#27ae60'
-}
+const PAGE_SIZE = 15
 
-const COLOR_ESTADO = {
-  'Abierto': '#e74c3c',
-  'EnProceso': '#e67e22',
-  'Pendiente': '#f1c40f',
-  'Resuelto': '#1abc9c',
-  'Cerrado': '#3498db'
+function claseEstado(estado) {
+  return `role-dashboard__status role-dashboard__status--${estado?.toLowerCase()}`
 }
 
 export default function DashboardAgente() {
   const [agente, setAgente] = useState(null)
   const [ticketPrioridad, setTicketPrioridad] = useState(undefined)
-  const [metricas, setMetricas] = useState(null)
+  const [metricas, setMetricas] = useState(undefined)
+  const [errorPerfil, setErrorPerfil] = useState('')
+  const [errorMetricas, setErrorMetricas] = useState('')
+  const [errorPrioridad, setErrorPrioridad] = useState('')
   const [showPasswordModal, setShowPasswordModal] = useState(false)
   const [paginaVencidos, setPaginaVencidos] = useState(1)
-  const itemsPerPage = 20
   const navigate = useNavigate()
 
-  const vencidosPaginados = metricas?.ticketsVencidos ? metricas.ticketsVencidos.slice((paginaVencidos - 1) * itemsPerPage, paginaVencidos * itemsPerPage) : []
-  const totalPaginasVencidos = metricas?.ticketsVencidos ? Math.ceil(metricas.ticketsVencidos.length / itemsPerPage) : 0
+  const totalVencidos = metricas?.ticketsVencidos?.length || 0
+  const totalPaginasVencidos = Math.max(1, Math.ceil(totalVencidos / PAGE_SIZE))
+  const paginaActualVencidos = Math.min(paginaVencidos, totalPaginasVencidos)
+  const vencidosPaginados = metricas?.ticketsVencidos
+    ? metricas.ticketsVencidos.slice((paginaActualVencidos - 1) * PAGE_SIZE, paginaActualVencidos * PAGE_SIZE)
+    : []
 
   useEffect(() => {
-    api.get('/agentes/perfil').then(ticket => {
-      setAgente(ticket.data)
-      
-      api.get(`/metricas/agente/${ticket.data.idAgente}`)
-        .then(r => setMetricas(r.data))
-        .catch(() => setMetricas(null))
+    let activo = true
 
-      return api.get(`/agentes/${ticket.data.idAgente}/ticket-prioridad`)
-    })
-    .then(r => setTicketPrioridad(r.data))
-    .catch(() => setTicketPrioridad(null))
+    api.get('/agentes/perfil')
+      .then(({ data }) => {
+        if (!activo) return
+        setAgente(data)
+
+        api.get(`/metricas/agente/${data.idAgente}`)
+          .then(response => {
+            if (!activo) return
+            setMetricas(response.data)
+            setPaginaVencidos(1)
+          })
+          .catch(() => {
+            if (!activo) return
+            setMetricas(null)
+            setErrorMetricas('No se pudieron cargar las métricas del agente.')
+          })
+
+        api.get(`/agentes/${data.idAgente}/ticket-prioridad`)
+          .then(response => {
+            if (activo) setTicketPrioridad(response.data)
+          })
+          .catch(() => {
+            if (!activo) return
+            setTicketPrioridad(null)
+            setErrorPrioridad('No se pudo cargar el ticket de mayor prioridad.')
+          })
+      })
+      .catch(() => {
+        if (!activo) return
+        setErrorPerfil('No se pudo cargar el perfil del agente.')
+        setMetricas(null)
+        setTicketPrioridad(null)
+      })
+
+    return () => {
+      activo = false
+    }
   }, [])
 
   function cerrarSesion() {
@@ -49,247 +76,189 @@ export default function DashboardAgente() {
   }
 
   return (
-    <div style={styles.page}>
-      <div style={styles.header}>
-        <span style={styles.headerTitle}>Dashboard del Agente</span>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button onClick={() => setShowPasswordModal(true)} style={styles.logoutBtn}>🔑 Cambiar contraseña</button>
-          <button onClick={cerrarSesion} style={styles.logoutBtn}>Cerrar sesión</button>
+    <div className="coordinator-dashboard role-dashboard">
+      <header className="coordinator-dashboard__header">
+        <div>
+          <p className="coordinator-dashboard__eyebrow">Sistema de Soporte UMG</p>
+          <span className="coordinator-dashboard__brand">Panel del agente</span>
         </div>
-      </div>
+        <div className="coordinator-dashboard__session-actions">
+          <button type="button" onClick={() => setShowPasswordModal(true)}>Cambiar contraseña</button>
+          <button type="button" onClick={cerrarSesion}>Cerrar sesión</button>
+        </div>
+      </header>
 
       {showPasswordModal && <CambiarPassword onClose={() => setShowPasswordModal(false)} />}
 
-      <div style={styles.section}>
-        <h3 style={styles.sectionTitle}>Acciones rápidas</h3>
-        <div style={styles.btnGroup}>
-          <button style={styles.actionBtn} onClick={() => navigate(`/agente/tickets`)}>
-            🎫 Mis tickets asignados
-          </button>
-          <button style={styles.actionBtn} onClick={() => navigate(`/agente/tickets/historial`)}>
-            📋 Historial de tickets
-          </button>
-          <button style={styles.actionBtn} onClick={() => navigate('/tickets/nuevo')}>
-            ➕ Crear ticket
-          </button>
-          <button style={styles.actionBtn} onClick={() => navigate('/agente/conocimiento')}>
-            📚 Base de conocimiento
-          </button>
-          {agente?.esGerencial && (
+      <main id="contenido-principal" className="coordinator-dashboard__main">
+        <section className="coordinator-dashboard__hero" aria-labelledby="agent-title">
+          <div>
+            <p className="coordinator-dashboard__eyebrow">Resumen operativo</p>
+            <h1 id="agent-title">Gestión de soporte</h1>
+            <p>Consulta tu desempeño, atiende los casos asignados y da seguimiento a los acuerdos de servicio.</p>
+          </div>
+        </section>
+
+        {(errorPerfil || errorMetricas) && (
+          <p className="coordinator-dashboard__feedback coordinator-dashboard__feedback--error" role="alert">
+            {[errorPerfil, errorMetricas].filter(Boolean).join(' ')}
+          </p>
+        )}
+
+        <section className="coordinator-dashboard__toolbar" aria-labelledby="acciones-agente">
+          <div>
+            <h2 id="acciones-agente">Acciones del agente</h2>
+            <nav className="coordinator-dashboard__nav" aria-label="Acciones del agente">
+              <Link to="/agente/tickets">Mis tickets asignados</Link>
+              <Link to="/agente/tickets/historial">Historial de tickets</Link>
+              <Link to="/tickets/nuevo">Crear ticket</Link>
+              <Link to="/agente/conocimiento">Base de conocimiento</Link>
+              {agente?.esGerencial && <Link to="/agente/crear-estudiante">Nuevo estudiante</Link>}
+              {agente?.esGerencial && <Link to="/agente/crear-agente">Nuevo agente</Link>}
+            </nav>
+          </div>
+        </section>
+
+        <div className="role-dashboard__section-gap" />
+
+        <section className="coordinator-dashboard__kpis" aria-label="Métricas del agente">
+          <article className="coordinator-dashboard__kpi">
+            <p>Tickets resueltos</p>
+            <strong>{metricas === undefined ? '...' : metricas?.ticketsResueltos ?? '--'}</strong>
+            <span>Resueltos o cerrados</span>
+          </article>
+          <article className="coordinator-dashboard__kpi">
+            <p>Resolución promedio</p>
+            <strong>{metricas === undefined ? '...' : metricas ? `${Number(metricas.tiempoPromedioResolucionHoras).toFixed(1)} h` : '--'}</strong>
+            <span>Tiempo promedio hasta cierre</span>
+          </article>
+          <article className={`coordinator-dashboard__kpi ${totalVencidos > 0 ? 'coordinator-dashboard__kpi--warning' : ''}`}>
+            <p>Tickets vencidos (SLA)</p>
+            <strong>{metricas === undefined ? '...' : metricas ? totalVencidos : '--'}</strong>
+            <span>{totalVencidos > 0 ? 'Requieren seguimiento' : 'Sin incidencias registradas'}</span>
+          </article>
+        </section>
+
+        <section className="coordinator-dashboard__panel coordinator-dashboard__sla" aria-labelledby="agent-sla-title">
+          <div className="coordinator-dashboard__panel-heading">
+            <div>
+              <p className="coordinator-dashboard__eyebrow">Cumplimiento</p>
+              <h2 id="agent-sla-title">Detalle de tickets vencidos</h2>
+            </div>
+            {metricas && <span className="coordinator-dashboard__count">{totalVencidos} tickets</span>}
+          </div>
+
+          {metricas === undefined ? (
+            <p className="coordinator-dashboard__empty" role="status">Cargando métricas...</p>
+          ) : metricas === null ? (
+            <p className="coordinator-dashboard__empty">No se encuentra disponible el detalle de SLA.</p>
+          ) : totalVencidos === 0 ? (
+            <p className="coordinator-dashboard__empty coordinator-dashboard__empty--success">No hay tickets vencidos.</p>
+          ) : (
             <>
-              <button style={{ ...styles.actionBtn, ...styles.actionBtnGerencial }}
-                onClick={() => navigate('/agente/crear-estudiante')}>
-                👤 Nuevo estudiante
-              </button>
-              <button style={{ ...styles.actionBtn, ...styles.actionBtnGerencial }}
-                onClick={() => navigate('/agente/crear-agente')}>
-                🛠️ Nuevo agente
-              </button>
+              <div className="coordinator-dashboard__table-region" tabIndex="0">
+                <table>
+                  <caption className="visually-hidden">Tickets asignados que incumplieron el acuerdo de nivel de servicio</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Ticket</th>
+                      <th scope="col">Tipo</th>
+                      <th scope="col">Prioridad</th>
+                      <th scope="col">Estado</th>
+                      <th scope="col">Creación</th>
+                      <th scope="col">Resolución</th>
+                      <th scope="col">Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {vencidosPaginados.map(ticket => (
+                      <tr key={ticket.idTicket}>
+                        <td>#{ticket.idTicket}</td>
+                        <td>{ticket.tipologiaITIL}</td>
+                        <td><span className={`coordinator-dashboard__priority coordinator-dashboard__priority--${ticket.prioridadSLA?.toLowerCase()}`}>{ticket.prioridadSLA}</span></td>
+                        <td><span className={claseEstado(ticket.estado)}>{ticket.estado}</span></td>
+                        <td>{new Date(ticket.fechaCreacion).toLocaleString('es-GT')}</td>
+                        <td>{ticket.fechaResolucion ? new Date(ticket.fechaResolucion).toLocaleString('es-GT') : <span className="role-dashboard__pending">Aún abierto</span>}</td>
+                        <td><Link className="role-dashboard__table-link" to={`/tickets/${ticket.idTicket}`}>Ver</Link></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <Pagination
+                currentPage={paginaActualVencidos}
+                totalItems={totalVencidos}
+                pageSize={PAGE_SIZE}
+                onPageChange={setPaginaVencidos}
+                ariaLabel="Paginación de tickets vencidos"
+              />
             </>
           )}
-        </div>
-      </div>
+        </section>
 
-      {/* Métricas del agente */}
-      <div style={styles.metricsGrid}>
-        <div style={styles.card}>
-          <h4 style={styles.cardTitle}>Tickets resueltos</h4>
-          <div style={styles.bigMetric}>
-            {metricas !== null ? metricas.ticketsResueltos : '...'}
-          </div>
-          <p style={styles.metricLabel}>tickets resueltos o cerrados</p>
-        </div>
-        <div style={styles.card}>
-          <h4 style={styles.cardTitle}>Promedio de resolución</h4>
-          <div style={styles.bigMetric}>
-            {metricas !== null ? `${Number(metricas.tiempoPromedioResolucionHoras).toFixed(1)}h` : '...'}
-          </div>
-          <p style={styles.metricLabel}>tiempo promedio hasta cierre</p>
-        </div>
-        <div style={styles.card}>
-          <h4 style={styles.cardTitle}>Tickets vencidos (SLA)</h4>
-          <div style={{ ...styles.bigMetric, color: metricas?.ticketsVencidos?.length > 0 ? '#e74c3c' : '#27ae60' }}>
-            {metricas !== null ? metricas.ticketsVencidos.length : '...'}
-          </div>
-          <p style={styles.metricLabel}>tickets que superaron el tiempo límite</p>
-        </div>
-      </div>
-
-      {/* Tabla de vencidos */}
-      {metricas?.ticketsVencidos?.length > 0 && (
-        <div style={styles.section}>
-          <div style={styles.card}>
-            <h4 style={styles.cardTitle}>⚠️ Detalle de tickets vencidos</h4>
-            <table style={styles.table}>
-              <thead>
-                <tr>
-                  <th style={styles.th}>Ticket</th>
-                  <th style={styles.th}>Tipo</th>
-                  <th style={styles.th}>Prioridad</th>
-                  <th style={styles.th}>Estado</th>
-                  <th style={styles.th}>Fecha creación</th>
-                  <th style={styles.th}>Fecha resolución</th>
-                  <th style={styles.th}>Acción</th>
-                </tr>
-              </thead>
-              <tbody>
-                {vencidosPaginados.map((t, i) => (
-                  <tr key={i}>
-                    <td style={styles.td}>#{t.idTicket}</td>
-                    <td style={styles.td}>{t.tipologiaITIL}</td>
-                    <td style={styles.td}>
-                      <span style={{ ...styles.badge, background: COLOR_PRIORIDAD[t.prioridadSLA] }}>
-                        {t.prioridadSLA}
-                      </span>
-                    </td>
-                    <td style={styles.td}>
-                      <span style={{ ...styles.badge, background: COLOR_ESTADO[t.estado] }}>
-                        {t.estado}
-                      </span>
-                    </td>
-                    <td style={styles.td}>{new Date(t.fechaCreacion).toLocaleString('es-GT')}</td>
-                    <td style={styles.td}>
-                      {t.fechaResolucion ? new Date(t.fechaResolucion).toLocaleString('es-GT') : <span style={{ color: '#e67e22', fontWeight: 'bold' }}>Aún abierto</span>}
-                    </td>
-                    <td style={styles.td}>
-                      <button style={styles.verBtn} onClick={() => navigate(`/tickets/${t.idTicket}`)}>Ver</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {totalPaginasVencidos > 1 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem' }}>
-                <button 
-                  style={{...styles.actionBtn, padding: '6px 12px', background: paginaVencidos === 1 ? '#ccc' : '#1a1a2e', cursor: paginaVencidos === 1 ? 'not-allowed' : 'pointer' }}
-                  disabled={paginaVencidos === 1}
-                  onClick={() => setPaginaVencidos(p => p - 1)}
-                >Anterior</button>
-                <span style={{ fontSize: '13px' }}>Página {paginaVencidos} de {totalPaginasVencidos}</span>
-                <button 
-                  style={{...styles.actionBtn, padding: '6px 12px', background: paginaVencidos === totalPaginasVencidos ? '#ccc' : '#1a1a2e', cursor: paginaVencidos === totalPaginasVencidos ? 'not-allowed' : 'pointer' }}
-                  disabled={paginaVencidos === totalPaginasVencidos}
-                  onClick={() => setPaginaVencidos(p => p + 1)}
-                >Siguiente</button>
+        <section className="coordinator-dashboard__metrics-grid" aria-label="Perfil y prioridad">
+          <article className="coordinator-dashboard__panel">
+            <div className="coordinator-dashboard__panel-heading">
+              <div>
+                <p className="coordinator-dashboard__eyebrow">Cuenta</p>
+                <h2>Mi perfil</h2>
               </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Sección 2 — Grid */}
-      <div style={styles.grid}>
-
-        {/* 2.1 Perfil del agente */}
-        <div style={styles.card}>
-          <div style={styles.cardHeader}>
-            <h4 style={styles.cardTitle}>Mi perfil</h4>
-            {agente?.esGerencial && (
-              <span style={styles.gerencialBadge}>Gerencial</span>
-            )}
-          </div>
-          {agente ? (
-            <div>
-              <InfoRow label="Nombre"       value={agente.nombreCompleto} />
-              <InfoRow label="Correo"       value={agente.correoInstitucional} />
-              <InfoRow label="Especialidad" value={agente.especialidad} />
-              <InfoRow label="Sede"         value={agente.sedeAsignada} />
-              <InfoRow label="Nivel acceso" value={agente.nivelAcceso} />
+              {agente?.esGerencial && <span className="coordinator-dashboard__count">Gerencial</span>}
             </div>
-          ) : (
-            <p style={styles.loading}>Cargando...</p>
-          )}
-        </div>
+            {agente ? (
+              <dl className="role-dashboard__details">
+                <InfoRow label="Nombre" value={agente.nombreCompleto} />
+                <InfoRow label="Correo" value={agente.correoInstitucional} />
+                <InfoRow label="Especialidad" value={agente.especialidad} />
+                <InfoRow label="Sede" value={agente.sedeAsignada} />
+                <InfoRow label="Nivel acceso" value={agente.nivelAcceso} />
+              </dl>
+            ) : errorPerfil ? (
+              <p className="coordinator-dashboard__empty">Perfil no disponible.</p>
+            ) : (
+              <p className="coordinator-dashboard__empty" role="status">Cargando perfil...</p>
+            )}
+          </article>
 
-        {/* 2.2 Ticket de mayor prioridad */}
-        <div style={styles.card}>
-          <h4 style={styles.cardTitle}>Ticket de mayor prioridad</h4>
-          {ticketPrioridad === undefined ? (
-            <p style={styles.loading}>Cargando...</p>
-          ) : ticketPrioridad === null ? (
-            <p style={styles.loading}>No tienes tickets abiertos asignados</p>
-          ) : (
-            <div>
-              <InfoRow label="Ticket #" value={ticketPrioridad.idTicket} />
-              <InfoRow label="Tipo"     value={ticketPrioridad.tipologiaITIL} />
-              <InfoRow label="Fecha"    value={new Date(ticketPrioridad.fechaCreacion).toLocaleDateString('es-GT', {
-                day: '2-digit', month: 'short', year: 'numeric'
-              })} />
-              {ticketPrioridad.descripcion && (
-                <div style={styles.descRow}>
-                  <span style={styles.rowLabel}>Descripción</span>
-                  <span style={styles.descValor}>{ticketPrioridad.descripcion}</span>
-                </div>
-              )}
-              <div style={styles.row}>
-                <span style={styles.rowLabel}>Prioridad</span>
-                <span style={{ ...styles.badgeBanner, background: COLOR_PRIORIDAD[ticketPrioridad.prioridadSLA] }}>
-                  {ticketPrioridad.prioridadSLA}
-                </span>
+          <article className="coordinator-dashboard__panel">
+            <div className="coordinator-dashboard__panel-heading">
+              <div>
+                <p className="coordinator-dashboard__eyebrow">Atención inmediata</p>
+                <h2>Ticket de mayor prioridad</h2>
               </div>
-              <div style={styles.row}>
-                <span style={styles.rowLabel}>Estado</span>
-                <span style={{ ...styles.badge, background: COLOR_ESTADO[ticketPrioridad.estado] }}>
-                  {ticketPrioridad.estado}
-                </span>
-              </div>
-              <div style={styles.row}>
-                <span style={styles.rowLabel}>Estudiante</span>
-                <span style={styles.descValor}>
-                  {ticketPrioridad.carne}
-                </span>
-              </div>
-              <button
-                style={{ ...styles.actionBtn, marginTop: '1rem', width: '100%' }}
-                onClick={() => navigate(`/agente/tickets`)}
-              >
-                Ver todos mis tickets
-              </button>
             </div>
-          )}
-        </div>
-
-      </div>
+            {ticketPrioridad === undefined ? (
+              <p className="coordinator-dashboard__empty" role="status">Cargando ticket...</p>
+            ) : errorPrioridad ? (
+              <p className="coordinator-dashboard__feedback coordinator-dashboard__feedback--error" role="alert">{errorPrioridad}</p>
+            ) : ticketPrioridad === null ? (
+              <p className="coordinator-dashboard__empty coordinator-dashboard__empty--success">No tienes tickets abiertos asignados.</p>
+            ) : (
+              <>
+                <dl className="role-dashboard__details">
+                  <InfoRow label="Ticket #" value={ticketPrioridad.idTicket} />
+                  <InfoRow label="Tipo" value={ticketPrioridad.tipologiaITIL} />
+                  <InfoRow label="Fecha" value={new Date(ticketPrioridad.fechaCreacion).toLocaleDateString('es-GT', { day: '2-digit', month: 'short', year: 'numeric' })} />
+                  {ticketPrioridad.descripcion && <InfoRow label="Descripción" value={ticketPrioridad.descripcion} />}
+                  <InfoRow label="Prioridad" value={<span className={`coordinator-dashboard__priority coordinator-dashboard__priority--${ticketPrioridad.prioridadSLA?.toLowerCase()}`}>{ticketPrioridad.prioridadSLA}</span>} />
+                  <InfoRow label="Estado" value={<span className={claseEstado(ticketPrioridad.estado)}>{ticketPrioridad.estado}</span>} />
+                  <InfoRow label="Estudiante" value={ticketPrioridad.carne} />
+                </dl>
+                <Link className="role-dashboard__panel-action" to="/agente/tickets">Ver todos mis tickets</Link>
+              </>
+            )}
+          </article>
+        </section>
+      </main>
     </div>
   )
 }
 
 function InfoRow({ label, value }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f0f0f0' }}>
-      <span style={{ fontSize: '13px', color: '#888' }}>{label}</span>
-      <span style={{ fontSize: '13px', fontWeight: '500', color: '#1a1a2e' }}>{value}</span>
+    <div className="role-dashboard__detail">
+      <dt>{label}</dt>
+      <dd>{value}</dd>
     </div>
   )
-}
-
-const styles = {
-  page: { minHeight: '100vh', background: '#f4f4f4', fontFamily: 'sans-serif' },
-  header: { background: '#1a1a2e', color: '#fff', padding: '1rem 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  headerTitle: { fontWeight: '500', fontSize: '15px' },
-  logoutBtn: { background: 'transparent', borderWidth: '1px', borderStyle: 'solid', borderColor: 'rgba(255,255,255,0.3)', color: '#fff', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px' },
-  section: { padding: '1.5rem 2rem 0' },
-  sectionTitle: { fontSize: '15px', fontWeight: '500', color: '#1a1a2e', marginBottom: '1rem' },
-  btnGroup: { display: 'flex', gap: '12px', flexWrap: 'wrap' },
-  actionBtn: { padding: '10px 20px', background: '#1a1a2e', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '13px' },
-  actionBtnGerencial: { background: '#6c3483' },
-  metricsGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', padding: '1.5rem 2rem 0' },
-  grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', padding: '1.5rem 2rem' },
-  card: { background: '#fff', borderRadius: '12px', padding: '1.25rem', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
-  cardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' },
-  cardTitle: { fontSize: '14px', fontWeight: '600', color: '#1a1a2e' },
-  bigMetric: { fontSize: '2.5rem', fontWeight: 'bold', color: '#1a1a2e', textAlign: 'center', padding: '0.5rem 0' },
-  metricLabel: { fontSize: '12px', color: '#aaa', textAlign: 'center', margin: 0 },
-  gerencialBadge: { fontSize: '11px', padding: '2px 9px', borderRadius: '20px', background: '#6c3483', color: '#fff', fontWeight: '500' },
-  row: { display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottomWidth: '1px', borderBottomStyle: 'solid', borderBottomColor: '#f0f0f0' },
-  rowLabel: { fontSize: '13px', color: '#888' },
-  badge: { fontSize: '11px', padding: '2px 10px', borderRadius: '20px', color: '#fff', fontWeight: '500' },
-  badgeBanner: { fontSize: '11px', padding: '4px 12px', borderRadius: '4px', color: '#fff', fontWeight: 'bold', minWidth: '80px', textAlign: 'center' },
-  descRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', padding: '8px 0', borderBottomWidth: '1px', borderBottomStyle: 'solid', borderBottomColor: '#f0f0f0' },
-  descValor: { fontSize: '13px', color: '#1a1a2e', lineHeight: '1.5', textAlign: 'right', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' },
-  loading: { fontSize: '13px', color: '#aaa', textAlign: 'center', padding: '1rem 0' },
-  table: { width: '100%', borderCollapse: 'collapse' },
-  th: { textAlign: 'left', padding: '10px', fontSize: '13px', color: '#555', borderBottomWidth: '2px', borderBottomStyle: 'solid', borderBottomColor: '#eee' },
-  td: { padding: '10px', fontSize: '13px', borderBottomWidth: '1px', borderBottomStyle: 'solid', borderBottomColor: '#eee', color: '#333' },
-  verBtn: { fontSize: '12px', padding: '4px 10px', borderRadius: '6px', borderWidth: '1px', borderStyle: 'solid', borderColor: '#ddd', background: 'transparent', cursor: 'pointer', color: '#555' }
 }

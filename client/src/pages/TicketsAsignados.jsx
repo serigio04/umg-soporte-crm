@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import Pagination from '../components/molecules/Pagination';
+
+const PAGE_SIZE = 15;
 
 const COLOR_PRIORIDAD = {
   'Alta':  '#e74c3c',
@@ -19,17 +22,19 @@ const COLOR_ESTADO = {
 export default function TicketsAsignados() {
   const [tickets, setTickets] = useState([])
   const [loading, setLoading] = useState(true)
-  const [idAgente, setIdAgente] = useState(null)
   const navigate = useNavigate();
   const [filtro, setFiltro] = useState('Todos')
+  const [pagina, setPagina] = useState(1)
 
   useEffect(() => {
     api.get('/agentes/perfil')
       .then(r => {
-        setIdAgente(r.data.idAgente)
         return api.get(`/agentes/${r.data.idAgente}/tickets`)
       })
-      .then(r => setTickets(r.data))
+      .then(r => {
+        setTickets(r.data)
+        setPagina(1)
+      })
       .catch(() => setTickets([]))
       .finally(() => setLoading(false))
   }, []);
@@ -37,16 +42,24 @@ export default function TicketsAsignados() {
   const ticketsFiltrados = filtro === 'Todos' 
     ? tickets 
     : tickets.filter(t => t.estado === filtro);
+  const totalPaginas = Math.max(1, Math.ceil(ticketsFiltrados.length / PAGE_SIZE));
+  const paginaActual = Math.min(pagina, totalPaginas);
+  const ticketsPaginados = ticketsFiltrados.slice((paginaActual - 1) * PAGE_SIZE, paginaActual * PAGE_SIZE);
+
+  function cambiarFiltro(nuevoFiltro) {
+    setFiltro(nuevoFiltro)
+    setPagina(1)
+  }
 
   return (
-    <div style={styles.page}>
-      <div style={styles.header}>
+    <div className="crm-page" style={styles.page}>
+      <header className="crm-header" style={styles.header}>
         <button style={styles.backBtn} onClick={() => navigate('/agente/dashboard')}>← Volver</button>
         <span style={styles.headerTitle}>Mis tickets asignados</span>
         <span />
-      </div>
+      </header>
 
-      <div style={styles.container}>
+      <main id="contenido-principal" style={styles.container}>
         <p style={styles.contador}>
           {loading ? 'Cargando...' : `${ticketsFiltrados.length} ticket${ticketsFiltrados.length !== 1 ? 's' : ''} en ${filtro}`}
         </p>
@@ -55,18 +68,23 @@ export default function TicketsAsignados() {
           <p style={styles.empty}>No tienes tickets abiertos asignados</p>
         )}
 
-        <div style={styles.filtro}>
-            <button style={styles.filstroBtn} onClick={() => setFiltro('Todos')}>Todos</button>
-            <button style={styles.filtroBtn} onClick={() => setFiltro('Abierto')}>Abierto</button>
-            <button style={styles.filtroBtn} onClick={() => setFiltro('EnProceso')}>En Proceso</button>
-            <button style={styles.filtroBtn} onClick={() => setFiltro('Pendiente')}>Pendiente</button>
-            <button style={styles.filtroBtn} onClick={() => setFiltro('Resuelto')}>Resuelto</button>
-            <button style={styles.filtroBtn} onClick={() => setFiltro('Cerrado')}>Cerrado</button>
+        <div className="crm-actions" style={styles.filtro} aria-label="Filtrar tickets por estado">
+            {['Todos', 'Abierto', 'EnProceso', 'Pendiente', 'Resuelto', 'Cerrado'].map(estado => (
+              <button
+                key={estado}
+                className="touch-target"
+                style={{ ...styles.filtroBtn, ...(filtro === estado ? styles.filtroBtnActive : {}) }}
+                onClick={() => cambiarFiltro(estado)}
+                aria-pressed={filtro === estado}
+              >
+                {estado === 'EnProceso' ? 'En Proceso' : estado}
+              </button>
+            ))}
         </div>
 
         <div style={styles.lista}>
-          {ticketsFiltrados.map(t => (
-            <div key={t.idTicket} style={styles.card}>
+          {ticketsPaginados.map(t => (
+            <article key={t.idTicket} className="crm-ticket-card" style={styles.card}>
               <div style={styles.cardTop}>
                 <span style={styles.ticketId}>Ticket #{t.idTicket}</span>
                 <div style={{ display: 'flex', gap: '8px' }}>
@@ -82,18 +100,27 @@ export default function TicketsAsignados() {
                 {t.descripcion && <p style={styles.descripcion}>{t.descripcion}</p>}
               </div>
 
-              <div style={styles.cardBottom}>
+              <div className="crm-card-footer" style={styles.cardBottom}>
                 <span style={styles.fecha}>
                   {new Date(t.fechaCreacion).toLocaleDateString('es-GT', {
                     day: '2-digit', month: 'short', year: 'numeric'
                   })}
                 </span>
-                <button style={styles.verBtn} onClick={() => navigate(`/tickets/${t.idTicket}`)}>Ver detalle</button>
+                <button className="touch-target" style={styles.verBtn} aria-label={`Ver detalle del ticket ${t.idTicket}`} onClick={() => navigate(`/tickets/${t.idTicket}`)}>Ver detalle</button>
               </div>
-            </div>
+            </article>
           ))}
         </div>
-      </div>
+        {!loading && (
+          <Pagination
+            currentPage={paginaActual}
+            totalItems={ticketsFiltrados.length}
+            pageSize={PAGE_SIZE}
+            onPageChange={setPagina}
+            ariaLabel="Paginación de tickets asignados"
+          />
+        )}
+      </main>
     </div>
   )
 }
@@ -109,6 +136,7 @@ const styles = {
   lista: { display: 'flex', flexDirection: 'column', gap: '10px' },
   filtro: { display: 'flex', gap: '8px', marginBottom: '1rem', flexWrap: 'wrap', justifyContent: 'center' },
   filtroBtn: { background: '#fff', borderWidth: '1px', borderStyle: 'solid', borderColor: '#1a1a2e', color: '#1a1a2e', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px' },
+  filtroBtnActive: { background: '#1a1a2e', color: '#fff' },
   estado: { fontSize: '13px', padding: '2px 9px', borderRadius: '20px', color: '#1a1a2e', fontWeight: '500', marginLeft: '8px', marginTop: '8px', background: '#eee' },
   dataTicket: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'},
   card: { background: '#fff', borderRadius: '10px', padding: '1rem 1.25rem', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' },

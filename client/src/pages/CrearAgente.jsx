@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
+import Button from '../components/atoms/Button'
+import FeedbackMessage from '../components/atoms/FeedbackMessage'
+import PasswordField from '../components/molecules/PasswordField'
 
 export default function CrearAgente() {
   const navigate = useNavigate()
@@ -35,66 +38,51 @@ export default function CrearAgente() {
   }
 
   return (
-    <div style={styles.container}>
-      <div style={styles.card}>
-        <h2 style={styles.title}>Crear Nuevo Agente</h2>
-        {error && <div style={styles.error}>{error}</div>}
-        <form onSubmit={handleSubmit} style={styles.form}>
-          <div style={styles.inputGroup}>
-            <label style={styles.label}>Nombre Completo</label>
-            <input type="text" name="nombreCompleto" value={formData.nombreCompleto} onChange={handleChange} required style={styles.input} />
+    <div className="crm-page form-page">
+      <main id="contenido-principal" className="form-card user-form-card">
+        <p className="form-eyebrow">Administración de usuarios</p>
+        <h1 className="form-title">Crear nuevo agente</h1>
+        <p className="form-intro">Registra los datos y permisos iniciales del integrante del equipo.</p>
+        <FeedbackMessage>{error}</FeedbackMessage>
+        <form onSubmit={handleSubmit} className="user-form" aria-busy={loading}>
+          <div className="form-field">
+            <label className="form-label" htmlFor="agente-nombre">Nombre completo *</label>
+            <input id="agente-nombre" className="form-control" type="text" name="nombreCompleto" value={formData.nombreCompleto} onChange={handleChange} autoComplete="name" required />
           </div>
-          <div style={styles.inputGroup}>
-            <label style={styles.label}>Correo Institucional</label>
-            <input type="email" name="correoInstitucional" value={formData.correoInstitucional} onChange={handleChange} required style={styles.input} />
+          <div className="form-field">
+            <label className="form-label" htmlFor="agente-correo">Correo institucional *</label>
+            <input id="agente-correo" className="form-control" type="email" name="correoInstitucional" value={formData.correoInstitucional} onChange={handleChange} autoComplete="email" required />
           </div>
-          <div style={styles.inputGroup}>
-            <label style={styles.label}>Contraseña</label>
-            <input type="password" name="password" value={formData.password} onChange={handleChange} required minLength={6} style={styles.input} />
-          </div>
-          <div style={styles.inputGroup}>
-            <label style={styles.label}>Especialidad</label>
-            <select name="especialidad" value={formData.especialidad} onChange={handleChange} required style={styles.input}>
+          <PasswordField id="agente-password" label="Contraseña" name="password" value={formData.password} onChange={handleChange} autoComplete="new-password" minLength={6} help="Usa al menos 6 caracteres." required />
+          <div className="form-field">
+            <label className="form-label" htmlFor="agente-especialidad">Especialidad *</label>
+            <select id="agente-especialidad" className="form-control" name="especialidad" value={formData.especialidad} onChange={handleChange} required>
               <option value="General">General (Coordinador)</option>
               <option value="Incidente">Incidente</option>
               <option value="Solicitud">Solicitud</option>
               <option value="Cambio">Cambio</option>
             </select>
           </div>
-          <div style={styles.inputGroup}>
-            <label style={styles.label}>Nivel de Acceso</label>
-            <select name="nivelAcceso" value={formData.nivelAcceso} onChange={handleChange} required style={styles.input}>
+          <div className="form-field">
+            <label className="form-label" htmlFor="agente-nivel">Nivel de acceso *</label>
+            <select id="agente-nivel" className="form-control" name="nivelAcceso" value={formData.nivelAcceso} onChange={handleChange} required>
               <option value={1}>1 - Básico</option>
               <option value={2}>2 - Medio</option>
               <option value={3}>3 - Coordinador</option>
             </select>
           </div>
-          <div style={styles.inputGroup}>
-            <label style={styles.label}>Sede Asignada</label>
-            <input type="text" name="sedeAsignada" value={formData.sedeAsignada} onChange={handleChange} required style={styles.input} />
+          <div className="form-field">
+            <label className="form-label" htmlFor="agente-sede">Sede asignada *</label>
+            <input id="agente-sede" className="form-control" type="text" name="sedeAsignada" value={formData.sedeAsignada} onChange={handleChange} required />
           </div>
-          <div style={styles.btnGroup}>
-            <button type="button" onClick={() => navigate(-1)} style={styles.cancelBtn}>Cancelar</button>
-            <button type="submit" disabled={loading} style={styles.submitBtn}>
+          <div className="form-actions">
+            <Button variant="secondary" onClick={() => navigate(-1)}>Cancelar</Button>
+            <Button type="submit" disabled={loading}>
               {loading ? 'Creando...' : 'Crear Agente'}
-            </button>
+            </Button>
           </div>
         </form>
-      </div>
+      </main>
     </div>
   )
-}
-
-const styles = {
-  container: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f4f4f4', padding: '20px' },
-  card: { background: '#fff', padding: '2rem', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', width: '100%', maxWidth: '500px' },
-  title: { fontSize: '1.25rem', color: '#1a1a2e', marginBottom: '1.5rem', textAlign: 'center' },
-  error: { background: '#fdecea', color: '#e74c3c', padding: '10px', borderRadius: '8px', marginBottom: '1rem', fontSize: '14px', textAlign: 'center' },
-  form: { display: 'flex', flexDirection: 'column', gap: '1rem' },
-  inputGroup: { display: 'flex', flexDirection: 'column', gap: '5px' },
-  label: { fontSize: '13px', color: '#555', fontWeight: '500' },
-  input: { padding: '10px', borderRadius: '8px', border: '1px solid #ccc', fontSize: '14px' },
-  btnGroup: { display: 'flex', gap: '10px', marginTop: '1rem' },
-  submitBtn: { flex: 1, padding: '12px', background: '#1a1a2e', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '500' },
-  cancelBtn: { flex: 1, padding: '12px', background: '#f0f0f0', color: '#333', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '500' }
 }

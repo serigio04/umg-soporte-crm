@@ -1,28 +1,25 @@
 require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env') })
-const { initDB, getConnection } = require('../config/db')
+const { pool } = require('../config/db')
 const bcrypt = require('bcryptjs')
 
 async function seed() {
-  await initDB()
-  const conn = await getConnection()
-
   const passwordHash = await bcrypt.hash('123456', 10)
 
-    await conn.execute(
-        `INSERT INTO "Usuarios" ("NombreCompleto", "CorreoInstitucional", "PasswordHash", "Rol")
-        VALUES (:nombre, :correo, :hash, :rol)`,
-        {
-            nombre: 'Sergio Gomar',
-            correo: 'sergio@miumg.edu.gt',
-            hash: passwordHash,
-            rol: 'Estudiante'
-        },
-        { autoCommit: true }
-    )
+  await pool.query(
+    `INSERT INTO usuarios (nombrecompleto, correoinstitucional, passwordhash, rol)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (correoinstitucional) DO UPDATE SET
+       nombrecompleto = EXCLUDED.nombrecompleto,
+       passwordhash = EXCLUDED.passwordhash,
+       rol = EXCLUDED.rol`,
+    ['Sergio Gomar', 'sergio@miumg.edu.gt', passwordHash, 'Estudiante']
+  )
 
-  console.log('Usuario de prueba creado')
-  await conn.close()
-  process.exit()
+  console.log('Usuario de prueba creado o actualizado')
+  await pool.end()
 }
 
-seed().catch(console.error)
+seed().catch(err => {
+  console.error(err)
+  process.exitCode = 1
+})

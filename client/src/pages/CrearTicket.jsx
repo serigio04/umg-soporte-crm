@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
+import FeedbackMessage from '../components/atoms/FeedbackMessage'
+import FormField from '../components/molecules/FormField'
 
 const TIPOLOGIAS = ['Incidente', 'Solicitud', 'Cambio']
 
@@ -16,13 +18,13 @@ export default function CrearTicket() {
   const [carnetEstudiante, setCarnetEstudiante] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [esAgente, setEsAgente] = useState(false)
-  const navigate = useNavigate()
-
-  useEffect(() => {
+  const [rol] = useState(() => {
     const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
-    setEsAgente(usuario.rol === 'Agente' || usuario.rol === 'Coordinador')
-  }, [])
+    return usuario.rol
+  })
+  const esEquipoSoporte = rol === 'Agente' || rol === 'Coordinador'
+  const [ticketCreado, setTicketCreado] = useState(null)
+  const navigate = useNavigate()
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -31,17 +33,17 @@ export default function CrearTicket() {
     if (!tipologia) return setError('Selecciona una tipología')
     if (descripcion.trim().length < 10)
       return setError('La descripción debe tener al menos 10 caracteres')
-    if (esAgente && !carnetEstudiante)
+    if (esEquipoSoporte && !carnetEstudiante)
       return setError('Debes ingresar el carnet del estudiante')
 
     setLoading(true)
     try {
-      await api.post('/tickets', { 
+      const { data } = await api.post('/tickets', {
         tipologiaITIL: tipologia, 
         descripcion,
-        ...(esAgente && { carnetEstudiante: parseInt(carnetEstudiante) })
+        ...(esEquipoSoporte && { carnetEstudiante: carnetEstudiante.trim() })
       })
-      navigate(-1)
+      setTicketCreado(data.ticket)
     } catch (err) {
       setError(err.response?.data?.message || 'Error al crear el ticket')
     } finally {
@@ -52,40 +54,60 @@ export default function CrearTicket() {
   const info = PRIORIDAD_INFO[tipologia]
 
   return (
-    <div style={styles.page}>
-      <div style={styles.header}>
+    <div className="crm-page" style={styles.page}>
+      <header className="crm-header" style={styles.header}>
         <button style={styles.backBtn} onClick={() => navigate(-1)}>
           ← Volver
         </button>
         <span style={styles.headerTitle}>Crear ticket</span>
         <span />
-      </div>
+      </header>
 
-      <div style={styles.container}>
-        <div style={styles.card}>
-          <h2 style={styles.title}>Nueva solicitud de soporte</h2>
+      <main id="contenido-principal" className="crm-form-container" style={styles.container}>
+        <section className="crm-form-card" style={styles.card} aria-labelledby="crear-ticket-title">
+          <h1 id="crear-ticket-title" style={styles.title}>Nueva solicitud de soporte</h1>
           <p style={styles.subtitle}>
             Completa el formulario y un agente te atenderá según la prioridad asignada.
           </p>
 
-          <form onSubmit={handleSubmit}>
-            {esAgente && (
-              <div style={styles.field}>
-                <label style={styles.label}>Carnet del estudiante *</label>
+          {ticketCreado ? (
+            <div>
+              <FeedbackMessage type="success">
+                Ticket #{ticketCreado.idTicket} creado correctamente.
+              </FeedbackMessage>
+              <p style={styles.confirmationText}>
+                Prioridad {ticketCreado.prioridadSLA}. {ticketCreado.idAgente ? 'El ticket fue asignado automáticamente.' : 'No hay un agente compatible disponible; coordinación podrá asignarlo.'}
+              </p>
+              <div className="crm-actions">
+                <button className="touch-target" style={styles.submitBtn} onClick={() => navigate(`/tickets/${ticketCreado.idTicket}`)}>
+                  Ver ticket
+                </button>
+                <button className="touch-target" style={styles.secondaryBtn} onClick={() => navigate(rol === 'Coordinador' ? '/coordinador/tickets' : rol === 'Agente' ? '/agente/tickets' : '/estudiante/tickets')}>
+                  Ir al historial
+                </button>
+              </div>
+            </div>
+          ) : <form onSubmit={handleSubmit} aria-busy={loading}>
+            {esEquipoSoporte && (
+              <FormField id="carne-estudiante" label="Carné del estudiante" help="Usa el formato 9989-XX-XXXXX, por ejemplo 9989-23-11046." required>
                 <input
-                  type="number"
-                  style={styles.input}
+                  id="carne-estudiante"
+                  type="text"
+                  inputMode="text"
+                  className="form-control"
                   value={carnetEstudiante}
                   onChange={e => setCarnetEstudiante(e.target.value)}
-                  placeholder="Ej: 1"
+                  placeholder="9989-23-11046"
+                  pattern="9989-[0-9]{2}-[0-9]{5}"
+                  aria-describedby="carne-estudiante-help"
                   required
                 />
-              </div>
+              </FormField>
             )}
 
-            <div style={styles.field}>
-              <label style={styles.label}>Tipo de solicitud *</label>
-              <div style={styles.tipologias}>
+            <fieldset style={styles.fieldset}>
+              <legend style={styles.label}>Tipo de solicitud *</legend>
+              <div className="crm-choice-group" style={styles.tipologias}>
                 {TIPOLOGIAS.map(t => (
                   <button
                     key={t}
@@ -95,6 +117,7 @@ export default function CrearTicket() {
                       ...(tipologia === t ? styles.tipBtnActive : {})
                     }}
                     onClick={() => setTipologia(t)}
+                    aria-pressed={tipologia === t}
                   >
                     {t === 'Incidente' && '🚨 '}
                     {t === 'Solicitud' && '📋 '}
@@ -103,10 +126,10 @@ export default function CrearTicket() {
                   </button>
                 ))}
               </div>
-            </div>
+            </fieldset>
 
             {info && (
-              <div style={{ ...styles.prioridadBox, borderColor: info.color }}>
+              <div className="crm-priority-summary" style={{ ...styles.prioridadBox, borderColor: info.color }} role="status">
                 <span style={{ fontSize: 13, color: '#555' }}>
                   Prioridad asignada automáticamente:
                 </span>
@@ -116,31 +139,34 @@ export default function CrearTicket() {
               </div>
             )}
 
-            <div style={styles.field}>
-              <label style={styles.label}>Descripción del problema *</label>
+            <FormField id="descripcion" label="Descripción del problema" help="Incluye qué intentabas hacer, qué ocurrió y cualquier mensaje mostrado. Mínimo 10 caracteres." required>
               <textarea
-                style={styles.textarea}
+                id="descripcion"
+                className="form-control"
                 rows={5}
                 value={descripcion}
                 onChange={e => setDescripcion(e.target.value)}
                 placeholder="Describe tu problema con el mayor detalle posible..."
+                minLength={10}
+                aria-describedby="descripcion-help descripcion-count"
                 required
               />
-              <span style={styles.charCount}>{descripcion.length} caracteres</span>
-            </div>
+              <span id="descripcion-count" style={styles.charCount}>{descripcion.length} caracteres</span>
+            </FormField>
 
-            {error && <p style={styles.error}>{error}</p>}
+            <FeedbackMessage>{error}</FeedbackMessage>
 
             <button
               type="submit"
+              className="touch-target"
               style={{ ...styles.submitBtn, opacity: loading ? 0.7 : 1 }}
               disabled={loading}
             >
               {loading ? 'Enviando...' : '🎫 Crear ticket'}
             </button>
-          </form>
-        </div>
-      </div>
+          </form>}
+        </section>
+      </main>
     </div>
   )
 }
@@ -155,6 +181,7 @@ const styles = {
   title: { fontSize: '18px', fontWeight: '600', color: '#1a1a2e', marginBottom: '6px' },
   subtitle: { fontSize: '13px', color: '#888', marginBottom: '1.5rem' },
   field: { marginBottom: '1.25rem' },
+  fieldset: { border: 0, padding: 0, margin: '0 0 1.25rem' },
   label: { display: 'block', fontSize: '13px', fontWeight: '500', color: '#444', marginBottom: '8px' },
   input: { width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '14px', boxSizing: 'border-box' },
   tipologias: { display: 'flex', gap: '10px' },
@@ -166,4 +193,6 @@ const styles = {
   charCount: { fontSize: '11px', color: '#aaa', float: 'right', marginTop: '4px' },
   error: { color: '#c0392b', fontSize: '13px', marginBottom: '1rem' },
   submitBtn: { width: '100%', padding: '12px', background: '#1a1a2e', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', cursor: 'pointer', fontWeight: '500' }
+  ,secondaryBtn: { width: '100%', padding: '12px', background: '#fff', color: '#1a1a2e', border: '1px solid #1a1a2e', borderRadius: '8px', fontSize: '14px', cursor: 'pointer', fontWeight: '500' },
+  confirmationText: { color: '#555', fontSize: '14px', lineHeight: 1.5, margin: '1rem 0' },
 }
