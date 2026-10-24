@@ -4,6 +4,11 @@ const cors = require('cors');
 const http = require('http');
 const { initDB } = require('./config/db');
 const { iniciarRealtime } = require('./realtime');
+const swaggerUi = require('swagger-ui-express');
+const YAML = require('yamljs');
+const path = require('path');
+
+const swaggerDocument = YAML.load(path.join(__dirname, '../docs/api/openapi.yaml'));
 
 const app = express();
 const server = http.createServer(app);
@@ -24,6 +29,8 @@ app.use('/api/repair.all', require('./routes/repair.route'));
 app.use('/api/usuarios', require('./routes/user.route'));
 app.use('/api/metricas', require('./routes/metrics.route'));
 app.use('/api/encuestas', require('./routes/survey.route'));
+
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Servidor corriendo' });

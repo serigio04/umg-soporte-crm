@@ -8,7 +8,9 @@
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.21.0",
     "socket.io": "^4.8.4",
-    "xss": "1.0.16"
+    "swagger-ui-express": "^5.0.1",
+    "xss": "1.0.16",
+    "yamljs": "^0.3.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"
@@ -18,7 +20,7 @@
     "db:migrate": "node src/scripts/migrate.js",
     "check": "node src/scripts/checkSyntax.js",
     "test": "node --test",
-    "dev": "nodemon src/index.js",
+    "dev": "node src/index.js",
     "start": "node src/index.js"
   }
 }
