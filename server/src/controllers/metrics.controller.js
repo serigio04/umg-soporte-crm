@@ -3,6 +3,16 @@ const metricsService = require('../services/metrics.service')
 const formatearFechaReporte = fecha => fecha ? new Date(fecha).toLocaleString('es-GT') : ''
 const escaparCsv = campo => `"${String(campo ?? '').replace(/"/g, '""')}"`
 
+const obtenerMetricas = async (req, res) => {
+  try {
+    const metricas = await metricsService.obtenerMetricas()
+    res.json(metricas)
+  } catch (err) {
+    console.error('Error obteniendo métricas generales:', err)
+    res.status(500).json({ message: 'Error interno del servidor' })
+  }
+}
+
 const obtenerDashboardCoordinador = async (req, res) => {
   try {
     const metricas = await metricsService.obtenerMetricasCoordinador()
@@ -30,6 +40,16 @@ const obtenerTickets = async (req, res) => {
     res.json(tickets)
   } catch (err) {
     console.error('Error obteniendo tickets para coordinación:', err)
+    res.status(500).json({ message: 'Error interno del servidor' })
+  }
+}
+
+const obtenerMetricasTickets = async (req, res) => {
+  try {
+    const metricas = await metricsService.obtenerMetricasTickets()
+    res.json(metricas)
+  } catch (err) {
+    console.error('Error obteniendo clasificación de tickets:', err)
     res.status(500).json({ message: 'Error interno del servidor' })
   }
 }
@@ -163,4 +183,13 @@ const descargarReporteCalificacionesExcel = async (req, res) => {
   }
 }
 
-module.exports = { obtenerDashboardCoordinador, obtenerMetricasAgente, obtenerTickets, descargarReporteCsv, descargarReporteExcel, descargarReporteCalificacionesExcel }
+module.exports = {
+  obtenerMetricas,
+  obtenerDashboardCoordinador,
+  obtenerMetricasAgente,
+  obtenerTickets,
+  obtenerMetricasTickets,
+  descargarReporteCsv,
+  descargarReporteExcel,
+  descargarReporteCalificacionesExcel
+}
